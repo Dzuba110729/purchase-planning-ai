@@ -25,7 +25,7 @@ jobs:
       - run: uv run pytest
       - name: В git нет ни одного CSV
         run: |
-          if git ls-files | grep -i csv; then
+          if git ls-files | grep -iE '\.csv$'; then
             echo "CSV в git запрещены"; exit 1
           fi
       # Не gitleaks-action: ему нужна платная лицензия для организаций.
