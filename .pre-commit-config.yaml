@@ -1,0 +1,16 @@
+repos:
+  - repo: local
+    hooks:
+      # Сканер секретов по добавленным в коммит изменениям (нужен установленный gitleaks).
+      - id: gitleaks
+        name: gitleaks (поиск ключей и токенов)
+        entry: gitleaks git --pre-commit --staged --redact -v
+        language: system
+        pass_filenames: false
+      # Жёсткая блокировка: CSV, папка share/, .env и .env.* (кроме .env.example) в git не попадают.
+      - id: block-data-files
+        name: блок CSV, share/ и .env
+        entry: "Запрещено коммитить CSV, share/ и .env: это данные заказчика и ключи."
+        language: fail
+        files: '(?i)(\.csv$|^share/|(^|/)\.env(\..+)?$)'
+        exclude: '(^|/)\.env\.example$'

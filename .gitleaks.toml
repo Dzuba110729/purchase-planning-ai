@@ -1,0 +1,5 @@
+# Правила gitleaks по умолчанию плюс проектные. Исключений нет.
+title = "purchasing gitleaks config"
+
+[extend]
+useDefault = true
