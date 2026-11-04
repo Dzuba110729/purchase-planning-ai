@@ -1,7 +1,7 @@
-"""Проекция facts.json и проверка текста по отправленному паспорту."""
+"""Проекция facts.json и допустимые утверждения для каждого паспорта."""
 
 import re
-import unicodedata
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from math import isfinite
@@ -17,82 +17,6 @@ ITEM_NUMBERS = (
 ITEM_FLAGS = ("order_now", "shortage_risk", "overstock_risk")
 SUMMARY_NUMBERS = ("live_total", "order_now_items", "order_qty_total", "shortage_risk_items")
 ANOMALY_NUMBERS = ("shortage_risk_items", "overstock_risk_items", "ask_supplier_items")
-
-FORBIDDEN = re.compile(
-    r"[%₽$€£¥¢₴₸₿¤×÷=]|(?<=\d)\s+(?:р|г|т)\b|\b(?:руб\w*|доллар\w*|бакс\w*|евро\w*|копе\w*|валют\w*|бюджет\w*|"
-    r"денег|деньг\w*|денеж\w*|цен[аыеуою]|стоимост\w*|сумм[ауые] оплаты|оплат\w*|финанс\w*|"
-    r"вес\w*|весит|масса|массой|кг|грамм\w*|кило|килограмм\w*|тонн\w*|"
-    r"контейнер\w*|конт|бренд\w*|производител\w*|назван\w*|наименован\w*|"
-    r"фирм\w*|компани\w*|артикул\w*|тыс\w*|мл[нрд]\w*|миллион\w*|миллиард\w*)\b"
-)
-DATE_TOKEN = re.compile(r"\b(?:\d{1,4}[-./]\d{1,2}[-./]\d{1,4}|\d{1,2}\s*/\s*\d{1,2})\b")
-DATE_ROLE = re.compile(
-    r"\b(?:(?P<next_order_date>дат\w* (?:следующ\w* )?(?:заказ\w*|закуп\w*)|"
-    r"следующ\w* заказ\w*|заказат\w*)|"
-    r"(?P<runout_date>(?:исчерпани|окончани)\w* (?:запас|остат)\w*|"
-    r"(?:запас|остат)\w* (?:законч|иссяк|исчерпа)\w*)|"
-    r"(?P<plan_date>дат\w* план\w*|по состоянию на))\b"
-)
-MONTH = re.compile(
-    r"\b(?:январ|феврал|март|апрел|ма[йяе]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*\b"
-)
-NUMBER = re.compile(r"[+-]?(?:(?:\d{1,3}(?: \d{3})+(?!\d)|\d+)(?:[.,]\d+)*|[.,]\d+)")
-NUMBER_WORD = re.compile(
-    r"\b(?:нул[ьяюеём]|ноль|од(?:ин|н[аоуйие]|ного|ному|ним|них)|два|две|двух|двумя?|"
-    r"три|тр[её]х|четыр[её]\w*|пят[ьи]|шест[ьи]|сем[ьи]|восем\w*|девят[ьи]|"
-    r"десят[ьи]|\w+надцат\w*|\w+дцат\w*|двести|триста|четыреста|сорок\w*|сто|"
-    r"(?:двух|тр[её]х|четыр[её]х|пят[ьи]|шест[ьи]|сем[ьи]|восьми|девят[ьи])сот|"
-    r"(?:двум|тр[её]м|четыр[её]м|пяти|шести|семи|восьми|девяти)стам\w*|"
-    r"(?:двух|тр[её]х|четыр[её]х|пяти|шести|семи|восьми|девяти)стах|"
-    r"перв\w*|втор\w*|трет\w*|четв[её]рт\w*|пят(?:ый|ая|ое|ые)|"
-    r"вдвое|втрое|дважды|трижды|половин\w*|полтора|полторы|сотн\w*|десятк\w*)\b"
-)
-TOKEN = re.compile(r"\w+(?:[-_]\w+)*")
-CAPITAL = re.compile(r"[А-ЯЁ][а-яё]+")
-SENTENCE_START = re.compile(r"(?:^|[.!?]\s+|\n)[«\"( ]*\Z")
-RISK_TERMS = {
-    "shortage_risk": re.compile(r"\b(?:дефицит|нехватк)\w*\b"),
-    "overstock_risk": re.compile(r"\b(?:излиш|затовар)\w*\b"),
-}
-RISK_NEGATION = re.compile(
-    r"\b(?:нет|отсутств\w*|не\s+(?:ожида\w*|выяв\w*|зафикс\w*|прогноз\w*|"
-    r"возник\w*|гроз\w*|предвид\w*|наблюда\w*|обнаруж\w*|будет))\b"
-)
-ORDER_NEGATION = re.compile(
-    r"\b(?:не\s+(?:(?:нужно|надо|стоит|требуется|рекомендуется)\s+)?(?:заказ[аы]\w*|закуп[аи]\w*)|"
-    r"(?:заказ\w*|закуп\w*)\s+не\s+(?:нуж\w*|надо|стоит|требу\w*|рекоменду\w*))\b"
-)
-IMMEDIATE = re.compile(r"\b(?:сейчас|сегодня|пока)\b")
-METRICS = {
-    "stock": r"остат(?:ок|ка|ки|ков|ке)|в наличии|на складе",
-    "in_transit_qty": r"в пути",
-    "sales_qty": r"продаж\w*|продано",
-    "daily_demand": r"дневн\w* спрос|ежедневн\w* спрос",
-    "order": r"к заказу|для заказа|заказат\w*|рекомендовано|рекомендуется",
-    "ask_supplier_items": r"(?:уточнен\w*|уточнит\w*|уточнен[оы]) у поставщика",
-}
-METRIC_LABEL = re.compile(
-    r"\b(?:" + "|".join(f"(?P<{field}>{pattern})" for field, pattern in METRICS.items()) + r")\b"
-)
-CLAUSE_BREAK = re.compile(r"[,!?;\n]|\.(?!\d)")
-NAME_CONTEXT = re.compile(
-    r"\b(?:поставщик(?:[ауеои]|ом)?\s+[а-яё-]+|"
-    r"у\s+(?!(?:поставщика|товара|товаров|позиции|позиций)\b)[а-яё-]+)\b"
-)
-STOCK_TERMS = {
-    "В", "По", "На", "Из", "Для", "До", "С", "При", "К", "А", "Если", "Известно", "Сейчас",
-    "Остаток", "Запас", "Запаса", "Остатков", "Осталось", "Текущий", "Текущего", "Склад",
-    "Товар", "Товара", "Товары", "Позиция", "Позиции", "Всего", "Итого", "Нужно", "Можно",
-    "Рекомендация", "Рекомендовано", "Рекомендуется", "Рекомендуемый", "Следующий",
-    "Заказ", "Заказать", "Заказывать", "Закупка", "Закупок", "Закупку", "Дата", "Поставка", "Поступление",
-    "Ожидается", "Плановая", "Плановый", "Планируется", "Данные", "Нет", "Не", "Риск",
-    "Риски", "Есть", "Высокий", "Низкий", "Обнаружен", "Обнаружены", "Отмечен", "У",
-    "Дефицит", "Излишек", "Излишки", "Аномалии", "Аномалий", "Особых", "Просрочено",
-    "Просроченные", "Проверьте", "Уточните", "Требуется", "Уточнение", "Прогноз",
-    "Прогнозируемый", "Продажи", "Спрос", "Средний", "Дневной", "Ежедневный", "Наличие",
-    "Количество", "Объём", "Срок", "Категория", "Код", "Недостаточно",
-}
-
 
 def _number(value):
     if (type(value) is int or (type(value) is float and isfinite(value))) and abs(value) <= 10 ** 15:
@@ -132,138 +56,143 @@ def item_passport(item, plan_date):
     }
 
 
-def _supported_number(token, numbers):
-    try:
-        shown = Decimal(token.replace(" ", "").replace(",", "."))
-    except ArithmeticError:
-        return False
-    return any(
-        number == shown or (
-            shown != 0 and shown.as_tuple().exponent > number.as_tuple().exponent
-            and shown == number.quantize(shown, rounding=ROUND_HALF_UP)
+MAX_PHRASES = 4
+
+
+@dataclass(frozen=True)
+class Phrase:
+    text: str
+    used_facts: tuple[str, ...]
+    insufficient_data: bool = False
+
+
+UNKNOWN = Phrase("В данных нет.", (), True)
+SUMMARY_PHRASES = (
+    ("order_now_items", "Позиций к заказу сейчас — {value}."),
+    ("order_qty_total", "К заказу {value} шт."),
+    ("shortage_risk_items", "Позиций с риском дефицита — {value}."),
+    ("live_total", "Активных позиций — {value}."),
+    ("plan_date", "Дата плана {value}."),
+)
+ANOMALY_PHRASES = (
+    ("shortage_risk_items", "Позиций с риском дефицита — {value}."),
+    ("overstock_risk_items", "Позиций с риском излишка — {value}."),
+    ("ask_supplier_items", "Заказов для уточнения у поставщика — {value}."),
+)
+ITEM_PHRASES = (
+    ("stock", "Остаток {value} шт."),
+    ("in_transit_qty", "В пути {value} шт."),
+    ("order_qty", "К заказу {value} шт."),
+    ("next_order_date", "Дата заказа {value}."),
+    ("runout_date", "По прогнозу запас закончится {value}."),
+    ("daily_demand", "Прогноз {value} шт. в день."),
+    ("demand_lead_cover", "Прогноз за плечо поставки и период покрытия — {value} шт."),
+    ("sales_qty", "Продажи {value} шт."),
+    ("overdue_excluded_qty", "Из расчёта исключены просроченные заказы на {value} шт."),
+    ("sku_id", "Код товара {value}."),
+)
+
+
+def _quantity(value):
+    return type(value) in (int, float) and value > 0
+
+
+def _format(value):
+    if isinstance(value, Decimal):
+        return format(value, "f").replace(".", ",")
+    if type(value) in (int, float):
+        return format(Decimal(str(value)).normalize(), "f").replace(".", ",")
+    return value
+
+
+def _item_phrases(passport):
+    quantity = passport["order_qty"]
+    order_now = passport["order_now"]
+    plan_date, next_date = passport["plan_date"], passport["next_order_date"]
+    planned = _quantity(quantity) and next_date != NO_DATA
+    if planned and plan_date != NO_DATA:
+        planned = next_date >= plan_date and (
+            order_now == NO_DATA or order_now == (next_date == plan_date)
         )
-        for number in numbers
+    for field, pattern in ITEM_PHRASES:
+        value = passport[field]
+        if value == NO_DATA:
+            if field == "order_qty":
+                yield Phrase("Количество к заказу — в данных нет.", (field,), True)
+            continue
+        if field == "next_order_date" and not planned:
+            continue
+        if field == "overdue_excluded_qty" and not _quantity(value):
+            continue
+        fields = ("order_qty", field) if field == "next_order_date" else (field,)
+        yield Phrase(pattern.format(value=_format(value)), fields)
+        if field == "daily_demand":
+            demand = Decimal(str(value))
+            rounded = demand.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if rounded and rounded != demand:
+                yield Phrase(f"Прогноз около {_format(rounded)} шт. в день.", (field,))
+
+    if planned and order_now is True and next_date == plan_date:
+        yield Phrase(
+            "Заказ рекомендован к размещению сейчас.", ("order_qty", "order_now", "plan_date", "next_order_date"),
+        )
+    for field, risk in (("shortage_risk", "дефицита"), ("overstock_risk", "излишка")):
+        value = passport[field]
+        if type(value) is bool:
+            word = "отмечен" if value else "не отмечен"
+            yield Phrase(f"Риск {risk} {word}.", (field,))
+
+
+def allowed_phrases(kind, passport):
+    if kind == "probe":
+        return (UNKNOWN,)
+    if kind == "item":
+        return (*_item_phrases(passport), UNKNOWN)
+    labels = SUMMARY_PHRASES if kind == "summary" else ANOMALY_PHRASES
+    inconsistent = kind == "summary" and passport["order_qty_total"] == 0 and _quantity(passport["order_now_items"])
+    return (
+        *(Phrase(pattern.format(value=_format(passport[field])), (field,))
+          for field, pattern in labels if passport[field] != NO_DATA
+          and not (inconsistent and field in ("order_now_items", "order_qty_total"))),
+        UNKNOWN,
     )
 
 
-def _risk_error(text, referenced):
-    for clause in re.split(r"[!?;\n]|\.(?!\d)|(?<!\d),|,(?!\d)", text.casefold()):
-        for field, term in RISK_TERMS.items():
-            if not term.search(clause):
-                continue
-            flag = referenced.get(field, referenced.get(f"{field}_items"))
-            if flag == NO_DATA and (NO_DATA in clause or "нет данных" in clause):
-                continue
-            if type(flag) not in (bool, int, float):
-                return True
-            zero_count = type(flag) is int and bool(re.search(r"(?<![\d.,])0(?![\d.,])", clause))
-            negative = bool(RISK_NEGATION.search(clause)) or zero_count
-            if bool(flag) == negative:
-                return True
-    return False
+def combine_phrases(phrases):
+    return Phrase(
+        " ".join(phrase.text for phrase in phrases),
+        tuple(dict.fromkeys(field for phrase in phrases for field in phrase.used_facts)),
+        any(phrase.insufficient_data for phrase in phrases),
+    )
 
 
-def _order_error(text, referenced, passport):
-    qty_field = "order_qty" if "order_qty" in passport else "order_qty_total"
-    for clause in CLAUSE_BREAK.split(text.casefold()):
-        if not ORDER_NEGATION.search(clause):
-            continue
-        qty = referenced.get(qty_field)
-        if type(qty) in (int, float) and qty == 0:
-            continue
-        if referenced.get("order_now") is False and IMMEDIATE.search(clause):
-            continue
-        return True
-    return False
-
-
-def _dates_error(text, referenced):
-    previous_end = 0
-    for match in DATE_TOKEN.finditer(text):
-        token = match[0]
-        if _date(token) == NO_DATA or token not in referenced.values():
-            return True
-        preceding = CLAUSE_BREAK.split(text[previous_end:match.start()].casefold())[-1]
-        roles = list(DATE_ROLE.finditer(preceding))
-        if roles and token != referenced.get(roles[-1].lastgroup):
-            return True
-        previous_end = match.end()
-    return False
-
-
-def _numbers_error(text, referenced, passport):
-    numbers = {field: Decimal(str(value)) for field, value in referenced.items() if type(value) in (int, float)}
-    previous_end = 0
-    for match in NUMBER.finditer(text):
-        preceding = CLAUSE_BREAK.split(text[previous_end:match.start()].casefold())[-1]
-        labels = list(METRIC_LABEL.finditer(preceding))
-        allowed = numbers.values()
-        if labels:
-            metric = labels[-1].lastgroup
-            if metric == "order":
-                metric = "order_qty" if "order_qty" in passport else "order_qty_total"
-            # Следом за «к заказу» могут стоять количество позиций или штуки.
-            units = re.match(r"\s+(?:позиц|товар)\w*\b", text[match.end():].casefold())
-            if metric == "order_qty_total" and units:
-                metric = "order_now_items"
-            allowed = (numbers[metric],) if metric in numbers else ()
-        if not _supported_number(match[0], allowed):
-            return True
-        previous_end = match.end()
-    return any(c.isnumeric() for c in NUMBER.sub(" ", text))
-
-
-def _text_error(text, referenced, passport):
-    normal = unicodedata.normalize("NFKC", text)
-    normal = re.sub(r"[̀́]", "", normal)
-    normal = re.sub(r"[−‐‑‒–—]", "-", normal)
-    if (not re.search(r"[а-яё]", normal.casefold()) or
-            any(unicodedata.category(c).startswith("C") and c != "\n" for c in normal)):
-        return "text"
-    if FORBIDDEN.search(normal.casefold()):
-        return "forbidden"
-    if MONTH.search(normal.casefold()) or re.search(r"\d:\d", normal):
-        return "date"
-
-    identifiers = {referenced.get("sku_id"), referenced.get("category")} - {NO_DATA, None}
-    for value in sorted(identifiers, key=len, reverse=True):
-        normal = re.sub(rf"(?<![\w-]){re.escape(value)}(?![\w-])", " ", normal)
-    if _dates_error(normal, referenced):
-        return "date"
-    normal = DATE_TOKEN.sub(" ", normal)
-
-    for match in TOKEN.finditer(normal):
-        token = match.group()
-        if token == "SKU":
-            continue
-        if re.search(r"[a-zA-Z]", token) or (any(c.isalpha() for c in token) and
-                (any(c.isnumeric() for c in token) or (len(token) > 1 and token.isupper()))):
-            return "identifier"
-    for match in CAPITAL.finditer(normal):
-        if match[0] not in STOCK_TERMS or not SENTENCE_START.search(normal[:match.start()]):
-            return "identifier"
-    if NAME_CONTEXT.search(normal.casefold()):
-        return "forbidden"
-    if _risk_error(normal, referenced):
-        return "risk"
-    if _order_error(normal, referenced, passport):
-        return "order"
-    if NUMBER_WORD.search(normal.casefold()) or _numbers_error(normal, referenced, passport):
-        return "number"
-    return None
-
-
-def answer_error(answer, passport):
+def answer_error(answer, choices):
     if type(answer) is not dict or set(answer) != {"text", "used_facts", "insufficient_data"}:
         return "schema"
     text, used, missing = answer["text"], answer["used_facts"], answer["insufficient_data"]
     if (not isinstance(text, str) or not text.strip() or len(text) > 900 or
             type(used) is not list or any(type(field) is not str for field in used) or type(missing) is not bool):
         return "schema"
-    if len(used) != len(set(used)) or not set(used) <= passport.keys():
+
+    remaining = text.strip()
+    selected = []
+    references = set()
+    for _ in range(MAX_PHRASES):
+        phrase = next(
+            (choice for choice in choices if remaining == choice.text or remaining.startswith(choice.text + " ")),
+            None,
+        )
+        if phrase is None or phrase.used_facts in references:
+            return "text"
+        references.add(phrase.used_facts)
+        selected.append(phrase)
+        remaining = remaining[len(phrase.text):].removeprefix(" ")
+        if not remaining:
+            break
+    if remaining or (UNKNOWN in selected and len(selected) > 1):
+        return "text"
+
+    expected = combine_phrases(selected)
+    if len(used) != len(set(used)) or set(used) != set(expected.used_facts) or missing != expected.insufficient_data:
         return "facts"
-    referenced = {field: passport[field] for field in used}
-    admits_missing = bool(re.search(r"\b(?:в данных нет|нет данных|не знаю)\b", " ".join(text.casefold().split())))
-    if missing != admits_missing or (not missing and (not used or NO_DATA in referenced.values())):
-        return "facts"
-    return _text_error(text.strip(), referenced, passport)
+    return None

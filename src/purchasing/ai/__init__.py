@@ -5,7 +5,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .client import AIConfig, DEFAULT_JOURNAL, FLASH, DeepSeek, TokenUsage
-from .passport import ANOMALY_NUMBERS, NO_DATA, SUMMARY_NUMBERS, answer_error, item_passport, totals_passport
+from .passport import (
+    ANOMALY_NUMBERS, MAX_PHRASES, SUMMARY_NUMBERS, UNKNOWN, allowed_phrases, answer_error,
+    combine_phrases, item_passport, totals_passport,
+)
 
 __all__ = ["AIConfig", "Text", "Texts", "write_texts"]
 
@@ -32,45 +35,30 @@ class Texts:
 
 FORECAST_WARNING = "Точность прогноза по товару низкая. Ориентир — сумма за период по категории."
 
-TEMPLATE_FIELDS = {
-    "summary": (
-        ("order_now_items", "Позиций к заказу сейчас"),
-        ("order_qty_total", "Всего к заказу, шт."),
-        ("shortage_risk_items", "Позиций с риском дефицита"),
-    ),
-    "anomalies": (
-        ("shortage_risk_items", "Позиций с риском дефицита"),
-        ("overstock_risk_items", "Позиций с риском излишка"),
-        ("ask_supplier_items", "Заказов для уточнения у поставщика"),
-    ),
-    "item": (
-        ("stock", "Остаток, шт."),
-        ("in_transit_qty", "В пути, шт."),
-        ("order_qty", "К заказу, шт."),
-        ("next_order_date", "Дата заказа"),
-    ),
-}
-
-
-def _template(kind, passport):
-    fields = TEMPLATE_FIELDS.get(kind, ())
-    sentences = [f"{label}: {passport[field]}." for field, label in fields]
-    return Text(
-        " ".join(sentences) if sentences else "В данных нет.",
-        tuple(field for field, _ in fields),
-        not fields or any(passport[field] == NO_DATA for field, _ in fields),
-        "template",
-    )
+def _template(choices):
+    # Первые фразы перечисляют основные факты, варианты округления и пояснения — дальше.
+    selected = []
+    references = set()
+    for phrase in choices:
+        if phrase == UNKNOWN or phrase.used_facts in references or phrase.used_facts == ("plan_date",):
+            continue
+        selected.append(phrase)
+        references.add(phrase.used_facts)
+        if len(selected) == MAX_PHRASES:
+            break
+    chosen = combine_phrases(selected or [UNKNOWN])
+    return Text(chosen.text, chosen.used_facts, chosen.insufficient_data, "template")
 
 
 def _generate(client, kind, passport):
     first_model = client.config.item_model if kind == "item" else client.config.summary_model
     models = (first_model, FLASH)
+    choices = allowed_phrases(kind, passport)
     error = None
     for model in models:
-        answer, error = client.ask(kind, passport, model, error)
+        answer, error = client.ask(kind, passport, choices, model, error)
         if error is None:
-            error = answer_error(answer, passport)
+            error = answer_error(answer, choices)
             if error is None:
                 return Text(
                     answer["text"].strip(), tuple(answer["used_facts"]), answer["insufficient_data"], "ai", model,
@@ -78,7 +66,7 @@ def _generate(client, kind, passport):
             client.errors[error] += 1
         if client.blocked or error in ("key_missing", "request_limit"):
             break
-    return _template(kind, passport)
+    return _template(choices)
 
 
 def _write_texts(facts, client):

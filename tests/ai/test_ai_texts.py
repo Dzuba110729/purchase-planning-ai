@@ -97,7 +97,7 @@ def test_provider_fallback_and_private_allowlisted_request(facts, tmp_path, mock
     transport = mock_http(
         failure, reply("К заказу 40 шт.", ["order_qty_total"]),
         b"broken envelope", b"broken again",
-        reply("Остаток SKU-ABCDEF 17 шт. Прогноз 1,26 шт. в день.",
+        reply("Код товара SKU-ABCDEF. Остаток 17 шт. Прогноз около 1,26 шт. в день.",
               ["sku_id", "stock", "daily_demand"]),
     )
     journal = tmp_path / "private.jsonl"
@@ -123,46 +123,61 @@ def test_provider_fallback_and_private_allowlisted_request(facts, tmp_path, mock
     }
     assert "PRIVATE" not in journal.read_text()
     assert "fake-for-unit-tests" not in journal.read_text()
-    assert "Остаток SKU-ABCDEF" not in journal.read_text()
+    request_message = json.loads(body(request)["messages"][-1]["content"])
+    assert reply("Остаток 17 шт.", ["stock"]) in request_message["phrases"]
+    assert reply("Дата заказа 2026-08-14.", ["order_qty", "next_order_date"]) in request_message["phrases"]
+    assert reply("Прогноз около 1,26 шт. в день.", ["daily_demand"]) in request_message["phrases"]
+    assert "Код товара SKU-ABCDEF. Остаток 17 шт." not in journal.read_text()
     assert len(journal.read_text().splitlines()) == 5
     assert journal.stat().st_mode & 0o777 == 0o600
     assert capsys.readouterr() == ("", "")
 
 
 @pytest.mark.parametrize(("bad_answer", "correction"), [
-    (reply("Остаток 999 шт.", ["stock"]), "числа"),
-    (reply("Остаток 40 шт.", ["stock"]), "числа"),
-    (reply("Заказать 17 шт.", ["stock", "order_qty"]), "числа"),
-    (reply("Заказать 17 шт.", ["stock"]), "числа"),
-    (reply("Остаток 40 шт.", ["stock", "order_qty"]), "числа"),
-    (reply("Остаток 1 256 шт.", ["daily_demand"]), "числа"),
-    (reply("Прогноз 1,25 шт.", ["daily_demand"]), "числа"),
-    (reply("Остаток сто шт.", ["stock"]), "числа"),
-    (reply("Остаток пятьсот штук.", ["stock"]), "числа"),
-    (reply("В пути четыре шт.", ["in_transit_qty"]), "числа"),
-    (reply("Дата заказа 2026-08-17.", ["next_order_date", "stock", "plan_date"]), "даты"),
-    (reply("Дата заказа 2026-08-14.", ["stock"]), "даты"),
-    (reply("Дата заказа 2026-08-23.", ["runout_date", "next_order_date"]), "даты"),
-    (reply("Дата заказа 8/14.", ["sales_qty", "demand_lead_cover"]), "даты"),
-    (reply("Дата заказа 14.08.2026.", ["next_order_date"]), "даты"),
-    (reply("Дата заказа 14 августа.", ["next_order_date"]), "даты"),
-    (reply("Остаток SKU-UVWXYZ 17 шт.", ["sku_id", "stock"]), "коды"),
-    (reply("Остаток 17 шт. у поставщика Ромашка.", ["stock"]), "коды"),
-    (reply("Остаток 17 шт. у поставщика ромашка.", ["stock"]), "запрещённые"),
-    (reply("Макита в наличии.", ["stock"]), "коды"),
-    (reply("Остаток 17 шт. у макиты.", ["stock"]), "запрещённые"),
-    (reply("Остаток 17 шт. Вес в данных нет.", ["stock"], True), "запрещённые"),
-    (reply("К заказу 40 руб.", ["order_qty"]), "запрещённые"),
-    (reply("К заказу 40 ₽.", ["order_qty"]), "запрещённые"),
-    (reply("К заказу 40 баксов.", ["order_qty"]), "запрещённые"),
-    (reply("К заказу 40 кило.", ["order_qty"]), "запрещённые"),
-    (reply("К заказу 40 контейнеров.", ["order_qty"]), "запрещённые"),
-    (reply("Риск дефицита отсутствует.", ["shortage_risk"]), "риски"),
-    (reply("Риск дефицита не возникает.", ["shortage_risk"]), "риски"),
-    (reply("Не нужно заказывать 40 шт.", ["order_qty"]), "рекомендацию"),
-    (reply("Риск излишка есть.", ["shortage_risk"]), "риски"),
-    (reply("Остаток 17 шт.", ["markup_pct"]), "ключи паспорта"),
-    (reply("Остаток 17 шт.", ["stock"], True), "ключи паспорта"),
+    (reply("Остаток 999 шт.", ["stock"]), "фразы"),
+    (reply("Остаток 40 шт.", ["stock"]), "фразы"),
+    (reply("Заказать 17 шт.", ["stock", "order_qty"]), "фразы"),
+    (reply("Заказать 17 шт.", ["stock"]), "фразы"),
+    (reply("Остаток 40 шт.", ["stock", "order_qty"]), "фразы"),
+    (reply("Остаток 1 256 шт.", ["daily_demand"]), "фразы"),
+    (reply("Прогноз 1,25 шт.", ["daily_demand"]), "фразы"),
+    (reply("Остаток сто шт.", ["stock"]), "фразы"),
+    (reply("Остаток пятьсот штук.", ["stock"]), "фразы"),
+    (reply("В пути четыре шт.", ["in_transit_qty"]), "фразы"),
+    (reply("Дата заказа 2026-08-17.", ["next_order_date", "stock", "plan_date"]), "фразы"),
+    (reply("Дата заказа 2026-08-14.", ["stock"]), "ключ"),
+    (reply("Дата заказа 2026-08-23.", ["runout_date", "next_order_date"]), "фразы"),
+    (reply("Дата заказа 8/14.", ["sales_qty", "demand_lead_cover"]), "фразы"),
+    (reply("Дата заказа 14.08.2026.", ["next_order_date"]), "фразы"),
+    (reply("Дата заказа 14 августа.", ["next_order_date"]), "фразы"),
+    (reply("Остаток SKU-UVWXYZ 17 шт.", ["sku_id", "stock"]), "фразы"),
+    (reply("Остаток 17 шт. у поставщика Ромашка.", ["stock"]), "фразы"),
+    (reply("Остаток 17 шт. у поставщика ромашка.", ["stock"]), "фразы"),
+    (reply("Макита в наличии.", ["stock"]), "фразы"),
+    (reply("Остаток 17 шт. у макиты.", ["stock"]), "фразы"),
+    (reply("Остаток 17 шт. Вес в данных нет.", ["stock"], True), "фразы"),
+    (reply("К заказу 40 руб.", ["order_qty"]), "фразы"),
+    (reply("К заказу 40 ₽.", ["order_qty"]), "фразы"),
+    (reply("К заказу 40 баксов.", ["order_qty"]), "фразы"),
+    (reply("К заказу 40 кило.", ["order_qty"]), "фразы"),
+    (reply("К заказу 40 контейнеров.", ["order_qty"]), "фразы"),
+    (reply("Риск дефицита отсутствует.", ["shortage_risk"]), "фразы"),
+    (reply("Риск дефицита не возникает.", ["shortage_risk"]), "фразы"),
+    (reply("Не нужно заказывать 40 шт.", ["order_qty"]), "фразы"),
+    (reply("Риск излишка есть.", ["shortage_risk"]), "фразы"),
+    (reply("К заказу 40 у.е.", ["order_qty"]), "фразы"),
+    (reply("Остаток макиты 17 шт.", ["stock"]), "фразы"),
+    (reply("2026-08-23 — дата заказа.", ["runout_date", "next_order_date"]), "фразы"),
+    (reply("Риск дефицита исключён.", ["shortage_risk"]), "фразы"),
+    (reply("Заказывать 40 шт. не следует.", ["order_qty"]), "фразы"),
+    (reply("Остаток 17 шт.", ["markup_pct"]), "ключ"),
+    (reply("Остаток 17 шт.", ["stock"], True), "ключ"),
+    (reply("В данных нет. Остаток 17 шт.", ["stock"], True), "фразы"),
+    (reply("Остаток 17 шт. Остаток 17 шт.", ["stock"]), "фразы"),
+    (reply("Остаток 17 шт.", ["stock", "stock"]), "ключ"),
+    (reply("Остаток 17 шт.", ["stock", "order_qty"]), "ключ"),
+    (reply("Дата заказа 2026-08-14.", ["next_order_date"]), "ключ"),
+    (reply("Прогноз 1,256 шт. в день. Прогноз около 1,26 шт. в день.", ["daily_demand"]), "фразы"),
     ({"text": "Остаток 17 шт.", "used_facts": ["stock"], "insufficient_data": 0}, "JSON"),
     ({"text": "Остаток 17 шт.", "used_facts": ["stock"], "insufficient_data": False, "x": 1}, "JSON"),
     ({"text": "Остаток 17 шт.", "insufficient_data": False}, "JSON"),
@@ -179,8 +194,8 @@ def test_invalid_item_answer_gets_one_corrective_retry_then_template(
     texts = write_texts(facts, journal_path=tmp_path / "requests.jsonl")
     assert texts.summary.source == "ai" and texts.summary.insufficient_data
     assert texts.items["SKU-ABCDEF"].source == "template"
-    assert "Остаток, шт.: 17." in texts.items["SKU-ABCDEF"].text
-    assert "К заказу, шт.: 40." in texts.items["SKU-ABCDEF"].text
+    assert "Остаток 17 шт." in texts.items["SKU-ABCDEF"].text
+    assert "К заказу 40 шт." in texts.items["SKU-ABCDEF"].text
     assert len(transport.requests) == 4
     assert correction in json.loads(body(transport.requests[-1])["messages"][-1]["content"])["correction"]
 
@@ -274,12 +289,11 @@ def test_acceptance_checks_twenty_products_cost_and_probe_privately(
     assert "SKU-" not in stdout and "Остаток" not in stdout and "fake-for-unit-tests" not in stdout
 
 
-
 def test_supported_action_and_dates_remain_available(facts, tmp_path, mock_http):
     transport = mock_http(
         reply("К заказу 40 шт.", ["order_qty_total"]),
         reply("В данных нет.", [], True),
-        reply("Заказать 40 шт. Дата заказа 2026-08-14. Запас закончится 2026-08-23.",
+        reply("К заказу 40 шт. Дата заказа 2026-08-14. По прогнозу запас закончится 2026-08-23.",
               ["order_qty", "next_order_date", "runout_date"]),
     )
     result = write_texts(facts, journal_path=tmp_path / "requests.jsonl").items["SKU-ABCDEF"]
@@ -287,13 +301,61 @@ def test_supported_action_and_dates_remain_available(facts, tmp_path, mock_http)
     assert len(transport.requests) == 3
 
 
-def test_supported_absence_of_order_and_shortage_risk_remains_available(facts, tmp_path, mock_http):
+def test_supported_zero_order_and_absence_of_shortage_risk_remain_available(facts, tmp_path, mock_http):
     facts["items"][0].update(order_qty=0, shortage_risk=False)
     transport = mock_http(
         reply("К заказу 40 шт.", ["order_qty_total"]),
         reply("В данных нет.", [], True),
-        reply("Заказывать не нужно. Риск дефицита не возникает.", ["order_qty", "shortage_risk"]),
+        reply("К заказу 0 шт. Риск дефицита не отмечен.", ["order_qty", "shortage_risk"]),
     )
     result = write_texts(facts, journal_path=tmp_path / "requests.jsonl").items["SKU-ABCDEF"]
     assert result.source == "ai"
+    assert len(transport.requests) == 3
+
+
+
+def test_conflicting_order_facts_have_no_date_or_urgent_action(facts, tmp_path, mock_http):
+    facts["items"][0].update(order_qty=0, order_now=True, next_order_date=facts["plan_date"])
+    facts["totals"].update(order_qty_total=0, order_now_items=1)
+    rejected = reply("Заказ рекомендован к размещению сейчас.", ["order_qty", "order_now", "plan_date", "next_order_date"])
+    transport = mock_http(
+        reply("Активных позиций — 1.", ["live_total"]), reply("В данных нет.", [], True), rejected, rejected,
+    )
+    texts = write_texts(facts, journal_path=tmp_path / "requests.jsonl")
+    summary, item = [json.loads(body(request)["messages"][-1]["content"]) for request in transport.requests[::2]]
+    assert all(not {"order_qty_total", "order_now_items"}.intersection(phrase["used_facts"])
+               for phrase in summary["phrases"])
+    assert all(not {"order_now", "next_order_date"}.intersection(phrase["used_facts"])
+               for phrase in item["phrases"])
+    assert texts.items["SKU-ABCDEF"].source == "template"
+    assert "К заказу 0 шт." in texts.items["SKU-ABCDEF"].text
+    assert "Дата заказа" not in texts.items["SKU-ABCDEF"].text
+
+
+def test_missing_order_quantity_is_explicit_and_grounded(facts, tmp_path, mock_http):
+    facts["items"][0]["order_qty"] = None
+    transport = mock_http(
+        reply("К заказу 40 шт.", ["order_qty_total"]),
+        reply("В данных нет.", [], True),
+        reply("Остаток 17 шт. Количество к заказу — в данных нет.", ["stock", "order_qty"], True),
+    )
+    text = write_texts(facts, journal_path=tmp_path / "requests.jsonl").items["SKU-ABCDEF"]
+    assert text.source == "ai"
+    assert text.insufficient_data is True
+    assert len(transport.requests) == 3
+
+
+
+def test_summary_and_anomaly_choices_reference_only_their_own_facts(facts, tmp_path, mock_http):
+    facts["totals"].update(overstock_risk_items=2, ask_supplier_items=3)
+    transport = mock_http(
+        reply("К заказу 40 шт. Позиций с риском дефицита — 1.", ["shortage_risk_items", "order_qty_total"]),
+        reply("Заказов для уточнения у поставщика — 3. Позиций с риском излишка — 2.",
+              ["ask_supplier_items", "overstock_risk_items"]),
+        reply("Риск дефицита отмечен.", ["shortage_risk"]),
+    )
+    texts = write_texts(facts, journal_path=tmp_path / "requests.jsonl")
+    assert texts.summary.source == texts.anomalies.source == "ai"
+    assert texts.anomalies.used_facts == ("ask_supplier_items", "overstock_risk_items")
+    assert texts.items["SKU-ABCDEF"].used_facts == ("shortage_risk",)
     assert len(transport.requests) == 3
