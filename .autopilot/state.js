@@ -13,7 +13,7 @@ window.STATE =
   "skillDir": "/Users/aleksej_dzyuba/.agents/skills/autopilot",
   "baseCommit": "c0058e1",
   "startedAt": "2026-11-04T11:54:55+03:00",
-  "updatedAt": "2026-11-04T16:19:20+03:00",
+  "updatedAt": "2026-11-04T16:37:33+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -63,8 +63,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 91,
-    "done": 17,
-    "inTicket": 74,
+    "done": 27,
+    "inTicket": 64,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -155,12 +155,12 @@ window.STATE =
       "retries": 0,
       "repairs": 0,
       "startedAt": "2026-11-04T13:00:01+03:00",
-      "finishedAt": "2026-11-04T13:06:35+03:00",
+      "finishedAt": "2026-11-04T16:22:51+03:00",
       "tests": {
         "passed": 52,
         "failed": 0
       },
-      "commit": "a8276ab"
+      "commit": "1b77278"
     },
     {
       "id": "03",
@@ -238,9 +238,16 @@ window.STATE =
       ],
       "review": "нет",
       "model": "обычная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-04T16:22:51+03:00",
+      "finishedAt": "2026-11-04T16:37:33+03:00",
+      "tests": {
+        "passed": 120,
+        "failed": 0
+      },
+      "commit": "3ab0ebd"
     },
     {
       "id": "05",
@@ -439,7 +446,7 @@ window.STATE =
     }
   ],
   "tests": {
-    "passed": 81,
+    "passed": 120,
     "failed": 0
   },
   "debt": {
@@ -475,9 +482,11 @@ window.STATE =
     "2026-11-04T13:00:01+03:00",
     "2026-11-04T13:06:35+03:00",
     "2026-11-04T13:09:08+03:00",
-    "2026-11-04T16:19:20+03:00"
+    "2026-11-04T16:19:20+03:00",
+    "2026-11-04T16:22:51+03:00",
+    "2026-11-04T16:37:33+03:00"
   ],
-  "rev": 26,
+  "rev": 31,
   "waiting": null,
   "waits": [],
   "log": [
@@ -634,6 +643,38 @@ window.STATE =
         "passed": 81,
         "failed": 0
       }
+    },
+    {
+      "t": "2026-11-04T16:22:51+03:00",
+      "k": "ticket",
+      "ids": [
+        "02"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 52,
+        "failed": 0
+      }
+    },
+    {
+      "t": "2026-11-04T16:22:51+03:00",
+      "k": "ticket",
+      "ids": [
+        "04"
+      ],
+      "act": "start"
+    },
+    {
+      "t": "2026-11-04T16:37:33+03:00",
+      "k": "ticket",
+      "ids": [
+        "04"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 120,
+        "failed": 0
+      }
     }
   ],
   "reqList": [
@@ -660,7 +701,7 @@ window.STATE =
     {
       "id": "R05",
       "text": "«Расчёты (прогноз, остатки, количество) делает обычный код на Python: он точный и повторяемый.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R06",
@@ -710,7 +751,7 @@ window.STATE =
     {
       "id": "R15",
       "text": "«Плечо считаем по поставщику, а не одно число 180»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R16",
@@ -725,7 +766,7 @@ window.STATE =
     {
       "id": "R18",
       "text": "«Период покрытия — по ритму поставщика: медиана интервала между приходами, в рамках 60–120 дней.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R19",
@@ -735,7 +776,7 @@ window.STATE =
     {
       "id": "R20",
       "text": "«Страховой запас — по ABC-группе: A — 95%, B — 90%, C — 80%. Важность = штуки × дециль цены × наценка.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R21",
@@ -745,22 +786,22 @@ window.STATE =
     {
       "id": "R22",
       "text": "«Количество округляется вверх до шага партии из истории. Нет истории — до 10 шт.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R23",
       "text": "«Товары с supply_type = unknown (12 живых): плечо = медиана по категории.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R24",
       "text": "««Риск излишка»: запаса с учётом заказов в пути хватает больше чем на 12 месяцев.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R25",
       "text": "««Риск дефицита»: запас кончится раньше, чем придёт заказ, размещённый сегодня.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R26",
@@ -800,7 +841,7 @@ window.STATE =
     {
       "id": "R33",
       "text": "«Запас в днях с учётом заказов в пути, дата заказа, количество, флаги дефицита и излишка»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R34",
@@ -1080,7 +1121,7 @@ window.STATE =
     {
       "id": "R89",
       "text": "«Плечо поставки: медиана 123 дня, p90 = 205, у поставщиков разное»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R90",
