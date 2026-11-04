@@ -46,3 +46,10 @@
 - `lists`: price_review[{sku_id,category,markup_pct,stock,stock_days,ending}], sell_off[{sku_id,category,stock}], ask_supplier[{sku_id,po_id|null,supplier_id|null,qty,days_overdue,promised_date}].
 - `forecast_accuracy`: {warning, computed, backtest_plan_date, horizon_months, categories[{category,skus,fact_units,wape_model,wape_base,model_better}]}.
 - Правка плеча (T04): плечо = медиана `planned_lead_days` заказов поставщика (≥3, значения ≤0 и >400 отброшены), иначе медиана категории (unknown — сразу категория), иначе null «нет данных». Новый верхний ключ `lead_time_distribution{items,orders_planned,by_source,by_supply_type,by_category}` — в каждом n, p25, median, p90. σ спроса — по продажам минус возвраты; «мало истории» — меньше 3 мес. от первой продажи.
+
+### Таск 05 (ai)
+
+- `write_texts(facts, *, config=AIConfig(), journal_path=...) -> Texts` принимает словарь из `facts.json` и возвращает `summary`, `anomalies`, `items` по ключу `sku_id`, `requests`, `token_usage`, `unaccounted_requests`, `errors`. Входные факты остаются неизменными.
+- `Text(text, used_facts, insufficient_data, source, model)`. Для отображения использовать `text` как обычный текст и показывать происхождение из `source` (`ai` или `template`). Числа закупки и даты брать из `facts.json`.
+- DeepSeek выбирает и упорядочивает фразы из вариантов, построенных из паспорта. Код сверяет фразы целиком, проверяет объединение ссылок на факты и согласованность флага отсутствия данных. Шаблон строится из тех же вариантов.
+- `python -m purchasing.ai.acceptance [--facts out/facts.json] [--off-peak]` требует `DEEPSEEK_API_KEY` в окружении процесса. Отчёт с текстами и журнал запросов остаются в закрытой папке `out/ai-private/`. Оценка стоимости использует тариф пиковых часов по умолчанию. `--off-peak` применяет тариф вне пика.
