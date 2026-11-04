@@ -31,3 +31,8 @@
 
 ## Что построили закрытые таски
 (пока ничего)
+
+### Таск 03 (forecast)
+- `build_forecast(dataset, plan_date=None, params=DEFAULT_PARAMS, horizon=18) -> Forecast(monthly[sku_id,category,month,qty], profile[категория×1..12], level, adjusted_history, lost_months; for_sku(), sum_months())`
+- `backtest(dataset, plan_date=2025-08-13, params) -> BacktestResult(table, detail, wape(cat,"model"|"base"), better())`; `fit()`, `Params`, `format_backtest()`, `forecast.plots.plot_backtest()`
+- CLI: `uv run purchasing backtest [--data-dir] [--plots-dir]`

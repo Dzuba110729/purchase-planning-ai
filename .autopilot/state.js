@@ -13,7 +13,7 @@ window.STATE =
   "skillDir": "/Users/aleksej_dzyuba/.agents/skills/autopilot",
   "baseCommit": "c0058e1",
   "startedAt": "2026-11-04T11:54:55+03:00",
-  "updatedAt": "2026-11-04T13:06:35+03:00",
+  "updatedAt": "2026-11-04T16:19:20+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -63,8 +63,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 91,
-    "done": 11,
-    "inTicket": 80,
+    "done": 17,
+    "inTicket": 74,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -190,9 +190,16 @@ window.STATE =
       ],
       "review": "нет",
       "model": "обычная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-04T13:09:08+03:00",
+      "finishedAt": "2026-11-04T16:19:20+03:00",
+      "tests": {
+        "passed": 81,
+        "failed": 0
+      },
+      "commit": "65ffb7c"
     },
     {
       "id": "04",
@@ -432,7 +439,7 @@ window.STATE =
     }
   ],
   "tests": {
-    "passed": 52,
+    "passed": 81,
     "failed": 0
   },
   "debt": {
@@ -466,9 +473,11 @@ window.STATE =
     "2026-11-04T12:01:39+03:00",
     "2026-11-04T12:42:33+03:00",
     "2026-11-04T13:00:01+03:00",
-    "2026-11-04T13:06:35+03:00"
+    "2026-11-04T13:06:35+03:00",
+    "2026-11-04T13:09:08+03:00",
+    "2026-11-04T16:19:20+03:00"
   ],
-  "rev": 23,
+  "rev": 26,
   "waiting": null,
   "waits": [],
   "log": [
@@ -605,6 +614,26 @@ window.STATE =
         "passed": 52,
         "failed": 0
       }
+    },
+    {
+      "t": "2026-11-04T13:09:08+03:00",
+      "k": "ticket",
+      "ids": [
+        "03"
+      ],
+      "act": "start"
+    },
+    {
+      "t": "2026-11-04T16:19:20+03:00",
+      "k": "ticket",
+      "ids": [
+        "03"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 81,
+        "failed": 0
+      }
     }
   ],
   "reqList": [
@@ -671,12 +700,12 @@ window.STATE =
     {
       "id": "R13",
       "text": "«Нужна корректировка спроса, иначе недозакажем»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R14",
       "text": "«Прогноз по месяцам, а не по среднему»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R15",
@@ -711,7 +740,7 @@ window.STATE =
     {
       "id": "R21",
       "text": "«Прогноз — сезонный профиль категории × уровень продаж товара за 12 мес, с исправлением упущенного спроса. Проверка — бэктест.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R22",
@@ -746,7 +775,7 @@ window.STATE =
     {
       "id": "R28",
       "text": "«Возвраты (2% продаж) вычитаем из спроса.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R29",
@@ -766,7 +795,7 @@ window.STATE =
     {
       "id": "R32",
       "text": "«Исправление упущенного спроса, сезонный профиль, прогноз на «плечо + покрытие», бэктест»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R33",
@@ -1061,7 +1090,7 @@ window.STATE =
     {
       "id": "R91",
       "text": "«Сезонность: обогреватели 36% в октябре, триммеры 28% в мае, смесители ровно»",
-      "status": "in-ticket"
+      "status": "done"
     }
   ],
   "gates": {
