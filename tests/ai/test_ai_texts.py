@@ -138,20 +138,28 @@ def test_provider_fallback_and_private_allowlisted_request(facts, tmp_path, mock
     (reply("Остаток 1 256 шт.", ["daily_demand"]), "числа"),
     (reply("Прогноз 1,25 шт.", ["daily_demand"]), "числа"),
     (reply("Остаток сто шт.", ["stock"]), "числа"),
+    (reply("Остаток пятьсот штук.", ["stock"]), "числа"),
     (reply("В пути четыре шт.", ["in_transit_qty"]), "числа"),
     (reply("Дата заказа 2026-08-17.", ["next_order_date", "stock", "plan_date"]), "даты"),
     (reply("Дата заказа 2026-08-14.", ["stock"]), "даты"),
+    (reply("Дата заказа 2026-08-23.", ["runout_date", "next_order_date"]), "даты"),
+    (reply("Дата заказа 8/14.", ["sales_qty", "demand_lead_cover"]), "даты"),
     (reply("Дата заказа 14.08.2026.", ["next_order_date"]), "даты"),
     (reply("Дата заказа 14 августа.", ["next_order_date"]), "даты"),
     (reply("Остаток SKU-UVWXYZ 17 шт.", ["sku_id", "stock"]), "коды"),
     (reply("Остаток 17 шт. у поставщика Ромашка.", ["stock"]), "коды"),
     (reply("Остаток 17 шт. у поставщика ромашка.", ["stock"]), "запрещённые"),
     (reply("Макита в наличии.", ["stock"]), "коды"),
+    (reply("Остаток 17 шт. у макиты.", ["stock"]), "запрещённые"),
     (reply("Остаток 17 шт. Вес в данных нет.", ["stock"], True), "запрещённые"),
     (reply("К заказу 40 руб.", ["order_qty"]), "запрещённые"),
     (reply("К заказу 40 ₽.", ["order_qty"]), "запрещённые"),
+    (reply("К заказу 40 баксов.", ["order_qty"]), "запрещённые"),
+    (reply("К заказу 40 кило.", ["order_qty"]), "запрещённые"),
     (reply("К заказу 40 контейнеров.", ["order_qty"]), "запрещённые"),
     (reply("Риск дефицита отсутствует.", ["shortage_risk"]), "риски"),
+    (reply("Риск дефицита не возникает.", ["shortage_risk"]), "риски"),
+    (reply("Не нужно заказывать 40 шт.", ["order_qty"]), "рекомендацию"),
     (reply("Риск излишка есть.", ["shortage_risk"]), "риски"),
     (reply("Остаток 17 шт.", ["markup_pct"]), "ключи паспорта"),
     (reply("Остаток 17 шт.", ["stock"], True), "ключи паспорта"),
@@ -164,6 +172,7 @@ def test_provider_fallback_and_private_allowlisted_request(facts, tmp_path, mock
 def test_invalid_item_answer_gets_one_corrective_retry_then_template(
     bad_answer, correction, facts, tmp_path, mock_http,
 ):
+    facts["items"][0].update(sales_qty=8, demand_lead_cover=14)
     transport = mock_http(
         reply("В данных нет.", [], True), reply("В данных нет.", [], True), bad_answer, bad_answer,
     )
@@ -263,3 +272,28 @@ def test_acceptance_checks_twenty_products_cost_and_probe_privately(
     stdout, stderr = capsys.readouterr()
     assert stderr == ""
     assert "SKU-" not in stdout and "Остаток" not in stdout and "fake-for-unit-tests" not in stdout
+
+
+
+def test_supported_action_and_dates_remain_available(facts, tmp_path, mock_http):
+    transport = mock_http(
+        reply("К заказу 40 шт.", ["order_qty_total"]),
+        reply("В данных нет.", [], True),
+        reply("Заказать 40 шт. Дата заказа 2026-08-14. Запас закончится 2026-08-23.",
+              ["order_qty", "next_order_date", "runout_date"]),
+    )
+    result = write_texts(facts, journal_path=tmp_path / "requests.jsonl").items["SKU-ABCDEF"]
+    assert result.source == "ai"
+    assert len(transport.requests) == 3
+
+
+def test_supported_absence_of_order_and_shortage_risk_remains_available(facts, tmp_path, mock_http):
+    facts["items"][0].update(order_qty=0, shortage_risk=False)
+    transport = mock_http(
+        reply("К заказу 40 шт.", ["order_qty_total"]),
+        reply("В данных нет.", [], True),
+        reply("Заказывать не нужно. Риск дефицита не возникает.", ["order_qty", "shortage_risk"]),
+    )
+    result = write_texts(facts, journal_path=tmp_path / "requests.jsonl").items["SKU-ABCDEF"]
+    assert result.source == "ai"
+    assert len(transport.requests) == 3

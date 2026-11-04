@@ -19,21 +19,31 @@ SUMMARY_NUMBERS = ("live_total", "order_now_items", "order_qty_total", "shortage
 ANOMALY_NUMBERS = ("shortage_risk_items", "overstock_risk_items", "ask_supplier_items")
 
 FORBIDDEN = re.compile(
-    r"[%₽$€£¥¢₴₸₿¤×÷=]|(?<=\d)\s+(?:р|г|т)\b|\b(?:руб\w*|доллар\w*|евро\w*|копе\w*|валют\w*|бюджет\w*|"
+    r"[%₽$€£¥¢₴₸₿¤×÷=]|(?<=\d)\s+(?:р|г|т)\b|\b(?:руб\w*|доллар\w*|бакс\w*|евро\w*|копе\w*|валют\w*|бюджет\w*|"
     r"денег|деньг\w*|денеж\w*|цен[аыеуою]|стоимост\w*|сумм[ауые] оплаты|оплат\w*|финанс\w*|"
-    r"вес\w*|весит|масса|массой|кг|грамм\w*|килограмм\w*|тонн\w*|"
+    r"вес\w*|весит|масса|массой|кг|грамм\w*|кило|килограмм\w*|тонн\w*|"
     r"контейнер\w*|конт|бренд\w*|производител\w*|назван\w*|наименован\w*|"
     r"фирм\w*|компани\w*|артикул\w*|тыс\w*|мл[нрд]\w*|миллион\w*|миллиард\w*)\b"
 )
-DATE_TOKEN = re.compile(r"\b\d{1,4}[-./]\d{1,2}[-./]\d{1,4}\b")
+DATE_TOKEN = re.compile(r"\b(?:\d{1,4}[-./]\d{1,2}[-./]\d{1,4}|\d{1,2}\s*/\s*\d{1,2})\b")
+DATE_ROLE = re.compile(
+    r"\b(?:(?P<next_order_date>дат\w* (?:следующ\w* )?(?:заказ\w*|закуп\w*)|"
+    r"следующ\w* заказ\w*|заказат\w*)|"
+    r"(?P<runout_date>(?:исчерпани|окончани)\w* (?:запас|остат)\w*|"
+    r"(?:запас|остат)\w* (?:законч|иссяк|исчерпа)\w*)|"
+    r"(?P<plan_date>дат\w* план\w*|по состоянию на))\b"
+)
 MONTH = re.compile(
     r"\b(?:январ|феврал|март|апрел|ма[йяе]|июн|июл|август|сентябр|октябр|ноябр|декабр)\w*\b"
 )
 NUMBER = re.compile(r"[+-]?(?:(?:\d{1,3}(?: \d{3})+(?!\d)|\d+)(?:[.,]\d+)*|[.,]\d+)")
 NUMBER_WORD = re.compile(
-    r"\b(?:нул[ьяюеём]|ноль|од(?:ин|н[аоуйие]|ного|ному|ним|них)|дв[аеух]|"
+    r"\b(?:нул[ьяюеём]|ноль|од(?:ин|н[аоуйие]|ного|ному|ним|них)|два|две|двух|двумя?|"
     r"три|тр[её]х|четыр[её]\w*|пят[ьи]|шест[ьи]|сем[ьи]|восем\w*|девят[ьи]|"
-    r"десят[ьи]|\w+надцат\w*|\w+дцат\w*|двест[иь]|трист[ао]|сорок\w*|сто|"
+    r"десят[ьи]|\w+надцат\w*|\w+дцат\w*|двести|триста|четыреста|сорок\w*|сто|"
+    r"(?:двух|тр[её]х|четыр[её]х|пят[ьи]|шест[ьи]|сем[ьи]|восьми|девят[ьи])сот|"
+    r"(?:двум|тр[её]м|четыр[её]м|пяти|шести|семи|восьми|девяти)стам\w*|"
+    r"(?:двух|тр[её]х|четыр[её]х|пяти|шести|семи|восьми|девяти)стах|"
     r"перв\w*|втор\w*|трет\w*|четв[её]рт\w*|пят(?:ый|ая|ое|ые)|"
     r"вдвое|втрое|дважды|трижды|половин\w*|полтора|полторы|сотн\w*|десятк\w*)\b"
 )
@@ -44,7 +54,15 @@ RISK_TERMS = {
     "shortage_risk": re.compile(r"\b(?:дефицит|нехватк)\w*\b"),
     "overstock_risk": re.compile(r"\b(?:излиш|затовар)\w*\b"),
 }
-NEGATION = re.compile(r"\b(?:нет|отсутств\w*|не\s+(?:ожида\w*|выяв\w*|зафикс\w*|прогноз\w*))\b")
+RISK_NEGATION = re.compile(
+    r"\b(?:нет|отсутств\w*|не\s+(?:ожида\w*|выяв\w*|зафикс\w*|прогноз\w*|"
+    r"возник\w*|гроз\w*|предвид\w*|наблюда\w*|обнаруж\w*|будет))\b"
+)
+ORDER_NEGATION = re.compile(
+    r"\b(?:не\s+(?:(?:нужно|надо|стоит|требуется|рекомендуется)\s+)?(?:заказ[аы]\w*|закуп[аи]\w*)|"
+    r"(?:заказ\w*|закуп\w*)\s+не\s+(?:нуж\w*|надо|стоит|требу\w*|рекоменду\w*))\b"
+)
+IMMEDIATE = re.compile(r"\b(?:сейчас|сегодня|пока)\b")
 METRICS = {
     "stock": r"остат(?:ок|ка|ки|ков|ке)|в наличии|на складе",
     "in_transit_qty": r"в пути",
@@ -57,13 +75,16 @@ METRIC_LABEL = re.compile(
     r"\b(?:" + "|".join(f"(?P<{field}>{pattern})" for field, pattern in METRICS.items()) + r")\b"
 )
 CLAUSE_BREAK = re.compile(r"[,!?;\n]|\.(?!\d)")
-SUPPLIER_NAME = re.compile(r"\bпоставщик(?:[ауеои]|ом)?\s+[а-яё-]+\b")
+NAME_CONTEXT = re.compile(
+    r"\b(?:поставщик(?:[ауеои]|ом)?\s+[а-яё-]+|"
+    r"у\s+(?!(?:поставщика|товара|товаров|позиции|позиций)\b)[а-яё-]+)\b"
+)
 STOCK_TERMS = {
     "В", "По", "На", "Из", "Для", "До", "С", "При", "К", "А", "Если", "Известно", "Сейчас",
     "Остаток", "Запас", "Запаса", "Остатков", "Осталось", "Текущий", "Текущего", "Склад",
     "Товар", "Товара", "Товары", "Позиция", "Позиции", "Всего", "Итого", "Нужно", "Можно",
     "Рекомендация", "Рекомендовано", "Рекомендуется", "Рекомендуемый", "Следующий",
-    "Заказ", "Заказать", "Закупка", "Закупок", "Закупку", "Дата", "Поставка", "Поступление",
+    "Заказ", "Заказать", "Заказывать", "Закупка", "Закупок", "Закупку", "Дата", "Поставка", "Поступление",
     "Ожидается", "Плановая", "Плановый", "Планируется", "Данные", "Нет", "Не", "Риск",
     "Риски", "Есть", "Высокий", "Низкий", "Обнаружен", "Обнаружены", "Отмечен", "У",
     "Дефицит", "Излишек", "Излишки", "Аномалии", "Аномалий", "Особых", "Просрочено",
@@ -136,9 +157,37 @@ def _risk_error(text, referenced):
             if type(flag) not in (bool, int, float):
                 return True
             zero_count = type(flag) is int and bool(re.search(r"(?<![\d.,])0(?![\d.,])", clause))
-            negative = bool(NEGATION.search(clause)) or zero_count
+            negative = bool(RISK_NEGATION.search(clause)) or zero_count
             if bool(flag) == negative:
                 return True
+    return False
+
+
+def _order_error(text, referenced, passport):
+    qty_field = "order_qty" if "order_qty" in passport else "order_qty_total"
+    for clause in CLAUSE_BREAK.split(text.casefold()):
+        if not ORDER_NEGATION.search(clause):
+            continue
+        qty = referenced.get(qty_field)
+        if type(qty) in (int, float) and qty == 0:
+            continue
+        if referenced.get("order_now") is False and IMMEDIATE.search(clause):
+            continue
+        return True
+    return False
+
+
+def _dates_error(text, referenced):
+    previous_end = 0
+    for match in DATE_TOKEN.finditer(text):
+        token = match[0]
+        if _date(token) == NO_DATA or token not in referenced.values():
+            return True
+        preceding = CLAUSE_BREAK.split(text[previous_end:match.start()].casefold())[-1]
+        roles = list(DATE_ROLE.finditer(preceding))
+        if roles and token != referenced.get(roles[-1].lastgroup):
+            return True
+        previous_end = match.end()
     return False
 
 
@@ -179,9 +228,8 @@ def _text_error(text, referenced, passport):
     identifiers = {referenced.get("sku_id"), referenced.get("category")} - {NO_DATA, None}
     for value in sorted(identifiers, key=len, reverse=True):
         normal = re.sub(rf"(?<![\w-]){re.escape(value)}(?![\w-])", " ", normal)
-    for token in DATE_TOKEN.findall(normal):
-        if _date(token) == NO_DATA or token not in referenced.values():
-            return "date"
+    if _dates_error(normal, referenced):
+        return "date"
     normal = DATE_TOKEN.sub(" ", normal)
 
     for match in TOKEN.finditer(normal):
@@ -194,10 +242,12 @@ def _text_error(text, referenced, passport):
     for match in CAPITAL.finditer(normal):
         if match[0] not in STOCK_TERMS or not SENTENCE_START.search(normal[:match.start()]):
             return "identifier"
-    if SUPPLIER_NAME.search(normal.casefold()):
+    if NAME_CONTEXT.search(normal.casefold()):
         return "forbidden"
     if _risk_error(normal, referenced):
         return "risk"
+    if _order_error(normal, referenced, passport):
+        return "order"
     if NUMBER_WORD.search(normal.casefold()) or _numbers_error(normal, referenced, passport):
         return "number"
     return None
