@@ -1,0 +1,14 @@
+# Данные заказчика и ключи — никогда в git
+*.csv
+*.CSV
+share/
+.env
+.env.*
+!.env.example
+.autopilot/*.log
+
+# Служебное
+node_modules/
+__pycache__/
+.DS_Store
+.venv/
