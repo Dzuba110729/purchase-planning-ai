@@ -22,7 +22,23 @@
 | 08 | Финальная проверка | 9 |
 | 09 | Видео и сдача | 10 |
 
-## Сессии 2–10 — ещё не начаты
+## Сессия 2 из 10 — этап 1 «Каркас и защита» (2026-11-04): 4 из 5 проверок зелёные, 5-я ждёт push protection
+
+Репозиторий: https://github.com/Dzuba110729/purchase-planning-ai (публичный). Коммиты: T01 каркас, T01 тесты хука. Ревью таска 01: блокирующих замечаний нет, 3 мелких закрыты.
+
+Результаты проверок (что запускал → что получил):
+1. `uv run pytest` → 17 passed.
+2. `git ls-files | grep -i csv` → пусто; `git log --all --name-only --format= | grep -i csv` → пусто; автотест `tests/test_repo_guards.py` зелёный.
+3. `gitleaks detect --source . --redact` → «no leaks found»; `gitleaks dir . --redact` → «no leaks found»; шаг gitleaks в CI зелёный.
+4. Временная копия репозитория, `pre-commit install`, `git add -f test.csv` и `.env` → коммит заблокирован сообщением «Запрещено коммитить CSV, share/ и .env»; `.env.example` проходит. Копия удалена.
+5. GitHub Actions, первый запуск после push (`gh run watch`) → все шаги зелёные (тесты, нет CSV, gitleaks по истории). Действия закреплены по хешу: checkout@3d3c42e5, setup-uv@68559e99; `permissions: contents: read`.
+
+Ждёт пользователя: включить push protection (Settings → Code security → Secret protection → Push protection); `gh api` показал `secret_scanning_push_protection: disabled`.
+
+### Что делать сессии 3 (этап 2: данные)
+Запустить `/autopilot` (продолжит с таска 02, зона `src/purchasing/data/` и `tests/data/`). Каркас: `uv sync`, `uv run pytest`, `uv run purchasing --help`. CSV только в `share/` (вне git). Перед коммитом gitleaks должен быть установлен (`uv run pre-commit install`).
+
+## Сессии 3–10 — ещё не начаты
 
 ## Что делать сессии 2 (этап 1: каркас и защита)
 1. Прочитать `PLAN.md` и `.autopilot/` (этот файл, `manifest.md`, `interfaces.md`, `tickets/01-karkas-i-zashchita.md`).
@@ -41,7 +57,8 @@
 - Файл «Вакансия Никиты Велса и отклик.md» в git не добавлен: не входит в бриф.
 
 ## Не доделано
-- Код системы (этапы 1–9).
+- Код системы (этапы 2–9).
+- Push protection на GitHub (шаг пользователя).
 
 ## Известные баги
 - Нет.
