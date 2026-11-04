@@ -12,7 +12,26 @@ class PublishedFacts(HTMLParser):
         self.labels = {}
         self.active = None
         self.scripts = 0
-        self.feed(path.read_text(encoding="utf-8"))
+        self.card_data = None
+        text = path.read_text(encoding="utf-8")
+        self.feed(text)
+        self._read_cards(text)
+
+    def _read_cards(self, text):
+        """Карточки товаров собираются в браузере из CARD_DATA: читаем те же значения, что попадут в data-fact."""
+        marker = "const CARD_DATA = "
+        self.card_data, _ = json.JSONDecoder().raw_decode(text[text.index(marker) + len(marker):])
+        fields = self.card_data["fields"]
+        for sku, (_, _, values, points, _) in self.card_data["cards"].items():
+            for (field, _, source), value in zip(fields, values, strict=True):
+                assert source
+                self._add(f"items.{sku}.{field}", *(value or ("", self.card_data["nodata"])))
+            for month, raw, shown in points:
+                self._add(f"items.{sku}.monthly_forecast.{month}", raw, shown)
+
+    def _add(self, key, raw, shown):
+        self.values.setdefault(key, set()).add(raw)
+        self.labels.setdefault((key, raw), set()).add(shown)
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
@@ -162,8 +181,11 @@ def test_escaped_ai_text_is_literal_html(sample_facts, tmp_path):
     path = build_site(sample_facts, texts, tmp_path)
     rendered = path.read_text(encoding="utf-8")
     assert PublishedFacts(path).scripts == 1
-    assert rendered.count("&lt;script&gt;alert(1)&lt;/script&gt;") == 3
-    assert rendered.count("Пояснение ИИ, цифры проверены") == 3
+    # сводка и риски — в самой странице; пояснение к товару — в данных карточки (в JSON знак «<» экранирован)
+    assert rendered.count("&lt;script&gt;alert(1)&lt;/script&gt;") == 2
+    assert rendered.count("Пояснение ИИ, цифры проверены") == 3  # две записи в странице и подпись в сборщике карточки
+    assert "\\u003cscript>alert(1)\\u003c/script>" in rendered
+    assert "<script>alert(1)</script>" not in rendered
 
 
 def test_every_real_fact_and_workbook_row(real_facts, tmp_path):
@@ -174,3 +196,48 @@ def test_every_real_fact_and_workbook_row(real_facts, tmp_path):
     xlsx = build_xlsx(real_facts, tmp_path / "order.xlsx")
     assert_numeric_facts(page, real_facts)
     assert_workbook_matches_page(xlsx, page, real_facts)
+
+
+def test_real_page_is_light_enough_for_a_phone(real_facts, tmp_path):
+    # Правка 3: было 6,3 МБ (все карточки товаров лежали в странице готовыми); цель — не больше 2 МБ без сжатия.
+    from purchasing.ai import AIConfig, write_texts
+    from purchasing.dashboard import build_site
+
+    path = build_site(real_facts, write_texts(real_facts, config=AIConfig(max_requests=0)), tmp_path)
+    assert path.stat().st_size <= 2 * 1024 * 1024, path.stat().st_size
+
+
+def test_discontinue_and_sell_off_lists_are_labelled_honestly(sample_facts, tmp_path):
+    # Правка 4: «вывести» — все мёртвые товары, «распродать остаток» — только с остатком на складе.
+    from purchasing.ai import AIConfig, write_texts
+    from purchasing.dashboard import build_site
+
+    sample_facts["lists"]["discontinue"] = [
+        {"sku_id": "SKU-000004", "category": "grain_mills", "stock": 5},
+        {"sku_id": "SKU-000005", "category": "grain_mills", "stock": 0},
+    ]
+    sample_facts["lists"]["sell_off"] = [{"sku_id": "SKU-000004", "category": "grain_mills", "stock": 5}]
+    sample_facts["totals"].update(dead_total=2, sell_off_items=1, sell_off_qty=5)
+    html = build_site(sample_facts, write_texts(sample_facts, config=AIConfig(max_requests=0)), tmp_path).read_text(encoding="utf-8")
+    assert "Распродать / вывести" not in html
+    import re
+
+    summaries = [re.sub(r"<[^>]+>", "", m) for m in re.findall(r"<summary>(.*?)</summary>", html)]
+    assert "Вывести из ассортимента (нет продаж 12 мес.) 2 поз." in summaries
+    assert "Распродать остаток 1 поз., 5 шт." in summaries
+    folds = html.split("<summary>Распродать остаток")[1].split("</details>")[0]
+    assert "SKU-000004" in folds and "SKU-000005" not in folds
+
+
+def test_real_labels_match_facts(real_facts, tmp_path):
+    import re
+
+    from purchasing.ai import AIConfig, write_texts
+    from purchasing.dashboard import build_site
+
+    html = build_site(real_facts, write_texts(real_facts, config=AIConfig(max_requests=0)), tmp_path).read_text(encoding="utf-8")
+    t = real_facts["totals"]
+    summaries = [re.sub(r"<[^>]+>", "", m).replace(" ", " ") for m in re.findall(r"<summary>(.*?)</summary>", html)]
+    assert f"Вывести из ассортимента (нет продаж 12 мес.) {t['dead_total']} поз." in summaries
+    assert f"Распродать остаток {t['sell_off_items']} поз., {t['sell_off_qty']} шт." in summaries
+    assert t["sell_off_items"] == sum(1 for x in real_facts["lists"]["discontinue"] if x["stock"] > 0)

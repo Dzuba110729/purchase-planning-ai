@@ -25,7 +25,7 @@ ITEM_NUMBERS = {
     "cover_days": ("Покрытие, дни", "receipts.csv → receipt_date, supplier_id, sku_id"),
     "safety_stock": ("Страховой запас, шт.", "разброс спроса из sales_monthly.csv → qty_sold, qty_returned, month"),
     "target_stock": ("Целевой запас, шт.", "спрос за плечо и покрытие плюс страховой запас · sales_monthly.csv → qty_sold, qty_returned"),
-    "batch_step": ("Шаг партии, шт.", "purchase_orders.csv → qty_ordered либо шаг по умолчанию"),
+    "batch_step": ("Шаг партии, шт.", "округление вверх: шаг по истории purchase_orders.csv → qty_ordered (от 3 заказов) или мелкий круглый шаг"),
     "markup_pct": ("Наценка, %", "sku_dim.csv → avg_markup_pct_12m"),
     "overdue_excluded_qty": ("Исключено просроченных, шт.", "purchase_orders.csv → qty_pending, status, promised_date"),
 }

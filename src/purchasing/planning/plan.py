@@ -25,7 +25,7 @@
    (месячный прогноз делится на дни месяца, для месяца плана — со дня плана).
    Запас в днях = (остаток + заказы в пути) / дневной спрос.
 6. Цель = спрос за (плечо + покрытие) + страховой запас; количество =
-   max(0, цель − остаток − в пути), вверх до шага партии.
+   max(0, цель − остаток − в пути), вверх до шага партии (шаг — кратность округления, см. `stats.py`).
 7. Дата заказа и дефицит — по дневной симуляции остатка: остаток уменьшается по прогнозу,
    приходы в пути добавляются в день прихода. Заказ нужен в последний день, когда
    остаток ещё не ниже «спрос за плечо + страховой»; если уже ниже — сегодня.
@@ -45,7 +45,7 @@ import pandas as pd
 
 from .params import (
     ABC_BOUNDS, FALLBACK_WINDOW_DAYS, NEW_ITEM_CV, NEW_ITEM_MONTHS, OVERDUE_MAX_DAYS, OVERSTOCK_DAYS,
-    PARAMS_FOR_FACTS, SIGMA_WINDOW_MONTHS, SERVICE_LEVELS, Z_VALUES,
+    MIN_BATCH_FLAG_RATIO, PARAMS_FOR_FACTS, SIGMA_WINDOW_MONTHS, SERVICE_LEVELS, Z_VALUES,
 )
 from purchasing.forecast.model import DEFAULT_PARAMS as FORECAST_PARAMS, _winsorize
 
@@ -307,8 +307,8 @@ def build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan
             safety_note = f"{safety_note}; {note}" if safety_note else note
 
         # цель и количество
-        step, step_src = batch_step_for(st, sid)
         target = (d_window + safety) if (lead is not None and cover is not None) else None
+        step, step_src, step_note = batch_step_for(st, sid, target)
         is_auto = sid in auto
         if not is_auto:
             order_qty, oq_note = 0, "не в автозакупке: низкая наценка"
@@ -319,6 +319,13 @@ def build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan
             missing += ["target_stock", "order_qty"]
         else:
             order_qty, oq_note = _ceil_to_step(target - stock - in_transit, step), None
+            min_past = st.batch_min_qty.get(sid)
+            if order_qty > 0 and min_past and min_past > MIN_BATCH_FLAG_RATIO * order_qty:
+                flg.append("possible_min_batch")
+                step_note = (f"{step_note}; " if step_note else "") + (
+                    f"раньше заказывали от {min_past} шт., а рассчитано {order_qty}: "
+                    "возможна минимальная партия у поставщика, проверьте"
+                )
 
         # дата заказа и риски
         next_date, no_note, order_now = None, None, None
@@ -366,13 +373,13 @@ def build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan
             "cover_days": cover, "cover_source": cover_src, "cover_note": NO_DATA if cover is None else None,
             "demand_lead_cover": _round(d_window, 2) if target is not None else None,
             "service_level": SERVICE_LEVELS[group], "safety_stock": _round(safety, 2), "safety_note": safety_note,
-            "target_stock": _round(target, 2), "batch_step": step, "batch_step_source": step_src,
+            "target_stock": _round(target, 2), "batch_step": step, "batch_step_source": step_src, "batch_step_note": step_note,
             "order_qty": order_qty, "order_qty_note": oq_note,
             "next_order_date": next_date, "next_order_note": no_note, "order_now": order_now,
             "shortage_risk": unavoidable, "unavoidable_shortage": unavoidable, "overstock_risk": overstock,
             "flags": flg, "notes": notes, "missing": missing,
             "monthly_forecast": [
-                {"month": str(month), "qty": float(qty)} for month, qty in monthly.sort_index().items()
+                {"month": str(month), "qty": round(float(qty), 2)} for month, qty in monthly.sort_index().items()
             ],
         })
 

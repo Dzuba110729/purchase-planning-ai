@@ -15,9 +15,13 @@
 * Период покрытия — медиана интервалов между датами прихода поставщика (разные даты,
   >= 3 дат), зажатая в 60–120 дней. Нет данных у поставщика — медиана этих значений
   по всем поставщикам с данными.
-* Шаг партии — наибольший общий делитель количеств всех заказов товара (`qty_ordered`
-  любого статуса). Он совпадает с кратностью, в которой товар реально заказывали;
-  нет заказов — `DEFAULT_BATCH_STEP` (10).
+* Шаг партии — кратность, до которой округляем заказ ВВЕРХ (а не размер прошлой партии).
+  Шаг по истории = наибольший общий делитель количеств заказов товара (`qty_ordered` любого
+  статуса). Он годится, только если заказов в истории не меньше `MIN_ORDERS_FOR_BATCH_STEP` (3)
+  и шаг не больше `HISTORY_STEP_MAX_SHARE` (50%) цели запаса. Иначе берётся мелкий круглый
+  шаг из лесенки `BATCH_STEP_LADDER` по масштабу цели запаса (см. `batch_step_for`).
+  Минимальную партию поставщика мы не знаем и не выдумываем: если самый маленький прошлый
+  заказ больше заказа в 3+ раза, позиция получает флаг `possible_min_batch`.
 """
 
 import math
@@ -27,8 +31,8 @@ import numpy as np
 import pandas as pd
 
 from .params import (
-    COVER_MAX_DAYS, COVER_MIN_DAYS, DEFAULT_BATCH_STEP, LEAD_MAX_DAYS,
-    MIN_ORDERS_FOR_SUPPLIER, MIN_RECEIPT_DATES_FOR_COVER,
+    BATCH_STEP_LADDER, COVER_MAX_DAYS, COVER_MIN_DAYS, HISTORY_STEP_MAX_SHARE, LEAD_MAX_DAYS,
+    MIN_ORDERS_FOR_BATCH_STEP, MIN_ORDERS_FOR_SUPPLIER, MIN_RECEIPT_DATES_FOR_COVER,
 )
 
 
@@ -39,7 +43,9 @@ class HistoryStats:
     supplier_lateness: dict[str, int] = field(default_factory=dict)
     supplier_cover: dict[str, int] = field(default_factory=dict)
     global_cover: int | None = None
-    batch_step: dict[str, int] = field(default_factory=dict)
+    batch_step: dict[str, int] = field(default_factory=dict)  # НОД прошлых заказов
+    batch_orders: dict[str, int] = field(default_factory=dict)  # число прошлых заказов
+    batch_min_qty: dict[str, int] = field(default_factory=dict)  # самый маленький прошлый заказ
 
 
 def _ceil_int(x: float) -> int:
@@ -131,12 +137,38 @@ def history_stats(ds, plan_date) -> HistoryStats:
     o = ds.orders
     o = o[o["qty_ordered"] > 0]
     for sku, grp in o.groupby("sku_id"):
-        st.batch_step[sku] = int(np.gcd.reduce(grp["qty_ordered"].astype("int64").to_numpy()))
+        q = grp["qty_ordered"].astype("int64").to_numpy()
+        st.batch_step[sku] = int(np.gcd.reduce(q))
+        st.batch_orders[sku] = int(len(q))
+        st.batch_min_qty[sku] = int(q.min())
     return st
 
 
-def batch_step_for(st: HistoryStats, sku_id: str) -> tuple[int, str]:
-    step = st.batch_step.get(sku_id)
-    if step and step > 0:
-        return step, "history"
-    return DEFAULT_BATCH_STEP, "default"
+def ladder_step(target: float) -> int:
+    """Мелкий круглый шаг по масштабу цели запаса: ступени из `BATCH_STEP_LADDER`."""
+    for limit, step in BATCH_STEP_LADDER:
+        if target < limit:
+            return step
+    return BATCH_STEP_LADDER[-1][1]
+
+
+def batch_step_for(st: HistoryStats, sku_id: str, target: float | None) -> tuple[int, str, str | None]:
+    """(шаг, источник `history`|`scale`, пояснение или None).
+
+    Шаг по истории берём, если заказов >= 3 и он не больше половины цели запаса. Иначе —
+    лесенка по цели запаса (цель неизвестна — самая мелкая ступень).
+    """
+    hist = st.batch_step.get(sku_id)
+    n = st.batch_orders.get(sku_id, 0)
+    base = ladder_step(target if target is not None else 0.0)
+    if not hist or hist <= 0 or n == 0:
+        return base, "scale", "в истории нет заказов: мелкий круглый шаг по масштабу потребности"
+    if n < MIN_ORDERS_FOR_BATCH_STEP:
+        return base, "scale", (
+            f"в истории заказов мало ({n}): шаг по ним ({hist}) не берём, округляем до мелкого круглого шага"
+        )
+    if target is not None and hist > HISTORY_STEP_MAX_SHARE * target:
+        return base, "scale", (
+            f"шаг по истории ({hist}) больше половины цели запаса: округляем до мелкого круглого шага"
+        )
+    return hist, "history", None

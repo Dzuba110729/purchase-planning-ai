@@ -6,7 +6,11 @@ COVER_MIN_DAYS = 60
 COVER_MAX_DAYS = 120
 OVERDUE_MAX_DAYS = 90  # просрочка до этого числа дней включительно — «в пути»; больше — «уточнить у поставщика»
 OVERSTOCK_DAYS = 365  # 12 месяцев
-DEFAULT_BATCH_STEP = 10
+# Шаг партии: лесенка «цель запаса < порога → шаг», дальше — последний шаг.
+BATCH_STEP_LADDER = ((300, 10), (3000, 50), (float("inf"), 100))
+MIN_ORDERS_FOR_BATCH_STEP = 3  # меньше прошлых заказов — шаг по истории не берём
+HISTORY_STEP_MAX_SHARE = 0.5  # шаг по истории не больше этой доли цели запаса
+MIN_BATCH_FLAG_RATIO = 3  # самый маленький прошлый заказ больше заказа в 3+ раза — флаг possible_min_batch
 ABC_BOUNDS = {"A": 0.80, "B": 0.95}  # накопленная доля важности; остальное — C
 SERVICE_LEVELS = {"A": 0.95, "B": 0.90, "C": 0.80}
 Z_VALUES = {g: NormalDist().inv_cdf(p) for g, p in SERVICE_LEVELS.items()}
@@ -26,7 +30,10 @@ PARAMS_FOR_FACTS = {
     "overdue_max_days": OVERDUE_MAX_DAYS,
     "overstock_days": OVERSTOCK_DAYS,
     "overstock_months": 12,
-    "default_batch_step": DEFAULT_BATCH_STEP,
+    "batch_step_ladder": [[None if lim == float("inf") else lim, step] for lim, step in BATCH_STEP_LADDER],
+    "min_orders_for_batch_step": MIN_ORDERS_FOR_BATCH_STEP,
+    "history_step_max_share": HISTORY_STEP_MAX_SHARE,
+    "min_batch_flag_ratio": MIN_BATCH_FLAG_RATIO,
     "abc_bounds": ABC_BOUNDS,
     "service_levels": SERVICE_LEVELS,
     "z_values": {g: round(z, 4) for g, z in Z_VALUES.items()},

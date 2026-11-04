@@ -8,6 +8,7 @@
 
 from datetime import date
 
+import pandas as pd
 import pytest
 
 from purchasing.planning import build_plan
@@ -125,7 +126,7 @@ def test_zero_stock(world):
 
 def test_new_item_uses_category_lead_default_step_and_simplified_safety(world):
     # NEW: одна запись продаж (дек. 2025, 30 шт), нет поставщика, supply_type=unknown, нет заказов.
-    # Плечо = медиана по категории c = 60; покрытие = медиана по всем поставщикам = 90; шаг по умолчанию 10.
+    # Плечо = медиана по категории c = 60; покрытие = медиана по всем поставщикам = 90; шаг по лесенке 10 (заказов в истории нет).
     # Важность S1 = 30*5*40 = 6000, NEW = 30*1*40 = 1200; доля до NEW = 6000/7200 = 0.833 -> B (z=1.2816).
     # Мало истории -> разброс = 50% от 30 = 15; запас = 1.2816*15*sqrt(60/30) = 27.19.
     # Цель 150 + 27.19 = 177.19; остаток 20 -> 157.19 -> до шага 10 вверх = 160.
@@ -138,7 +139,7 @@ def test_new_item_uses_category_lead_default_step_and_simplified_safety(world):
     it = item(build_plan(ds, fc), "NEW")
     assert (it["lead_time_days"], it["lead_time_source"]) == (60, "category")
     assert (it["cover_days"], it["cover_source"]) == (90, "all_suppliers")
-    assert (it["batch_step"], it["batch_step_source"]) == (10, "default")
+    assert (it["batch_step"], it["batch_step_source"]) == (10, "scale")
     assert it["abc_group"] == "B"
     assert it["safety_stock"] == pytest.approx(27.19, abs=0.02)
     assert "мало истории" in it["safety_note"]
@@ -209,13 +210,13 @@ def test_safety_stock_ignores_single_spike(world):
 
 def test_safety_stock_capped_by_demand_over_lead_plus_cover(world):
     # тот же всплеск, но спрос 0.1 шт/день: за 150 дней 15 шт. Расчётный запас 60.44 > 15 -> ровно 15.
-    # Цель = 15 + 15 = 30; остаток 0 -> 30 -> до шага 50 = 50.
+    # Цель = 15 + 15 = 30; остаток 0 -> 30. Шаг по истории 50 больше половины цели -> лесенка 10 -> 30.
     ds, fc = world(0, {"S1": 0.1}, monthly_sales={"S1": [30] * 5 + [300] + [30] * 6})
     it = item(build_plan(ds, fc))
     assert it["demand_lead_cover"] == pytest.approx(15)
     assert it["safety_stock"] == pytest.approx(15)
     assert "ограничен" in it["safety_note"] and "safety_capped" in it["flags"]
-    assert it["target_stock"] == pytest.approx(30) and it["order_qty"] == 50
+    assert it["target_stock"] == pytest.approx(30) and it["order_qty"] == 30
 
 
 def test_lead_time_is_planned_not_first_receipt(world):
@@ -261,3 +262,64 @@ def test_four_months_of_history_is_enough_for_real_sigma(build):
     it = build_plan(ds, make_forecast({"S1": 1.0})).item("S1")
     assert it["safety_stock"] == pytest.approx(30.03, abs=0.05)
     assert "safety_simplified" not in it["flags"] and it["safety_note"] is None
+
+
+def _one_big_order_world(world, n_orders=1, qty=7000):
+    # S1 — обычная история (3 заказа 50/100/150). S2 — у того же поставщика, в истории n_orders заказов по qty шт.
+    o1, r1 = history_orders("SUP1", "S1", lead=60, promised_lead=60)
+    o2, r2 = history_orders("SUP1", "S2", n=n_orders, lead=60, promised_lead=60, qtys=(qty,))
+    # S2: 1 шт/день, остаток 20 -> цель 150 (60 + 90 дней, запас 0) -> потребность 130
+    return world(
+        100, {"S1": 1.0, "S2": 1.0}, history=([*o1, *o2], [*r1, *r2]),
+        extra_skus=[{"sku_id": "S2", "supplier_id": "SUP1"}], extra_stock={"S2": 20},
+    )
+
+
+def test_single_huge_past_order_does_not_become_batch_step(world):
+    # Один заказ в истории на 7000, потребность 130: раньше шаг = 7000 и заказ = 7000.
+    # Теперь заказов меньше 3 -> шаг по лесенке (цель 150 < 300 -> 10), заказ = 130, и позиция помечена флагом.
+    ds, fc = _one_big_order_world(world)
+    it = item(build_plan(ds, fc), "S2")
+    assert it["target_stock"] == pytest.approx(150)
+    assert (it["batch_step"], it["batch_step_source"]) == (10, "scale")
+    assert it["order_qty"] == 130 != 7000
+    assert "possible_min_batch" in it["flags"]
+    assert "возможна минимальная партия" in it["batch_step_note"]
+    assert "7000" in it["batch_step_note"]
+
+
+def test_three_equal_huge_orders_also_rejected_when_step_exceeds_half_of_target(world):
+    # 3 заказа по 7000: заказов достаточно, но шаг 7000 больше половины цели 150 -> лесенка.
+    ds, fc = _one_big_order_world(world, n_orders=3)
+    it = item(build_plan(ds, fc), "S2")
+    assert (it["batch_step"], it["batch_step_source"]) == (10, "scale")
+    assert it["order_qty"] == 130 and "possible_min_batch" in it["flags"]
+
+
+def test_regular_history_step_is_kept_without_flag(world):
+    # S1: заказы 50/100/150 -> шаг 50 (<= половины цели 150), флага минимальной партии нет
+    ds, fc = _one_big_order_world(world)
+    it = item(build_plan(ds, fc), "S1")
+    assert (it["batch_step"], it["batch_step_source"]) == (50, "history")
+    assert it["batch_step_note"] is None and "possible_min_batch" not in it["flags"]
+
+
+def test_ladder_scales_with_target():
+    from purchasing.planning.stats import ladder_step
+
+    assert [ladder_step(x) for x in (0, 299.9, 300, 2999, 3000, 50000)] == [10, 10, 50, 50, 100, 100]
+
+
+def test_supplier_lead_uses_all_orders_with_valid_planned_days_and_drops_over_400(world):
+    # Плановые сроки заказов поставщика: 100, 120, 140 и два «мусорных» по 444 (> 400, как в PO-2165B7 у SUP-640208).
+    # Без приходов вообще: плечо — медиана всех годных заказов (1…400) = 120, а не медиана с мусором (140).
+    hist = history_orders("SUP1", "S1", n=3, lead=60, promised_lead=60)
+    orders = []
+    for i, planned in enumerate((100, 120, 140, 444, 444)):
+        row = dict(hist[0][0])
+        row.update(po_id=f"LEAD-{i}", planned_lead_days=planned, status="open", qty_received=0, qty_pending=0,
+                   order_date=pd.Timestamp("2025-06-01"), promised_date=pd.Timestamp("2025-06-01") + pd.Timedelta(days=planned))
+        orders.append(row)
+    ds, fc = world(100, {"S1": 1.0}, history=(orders, []))
+    it = item(build_plan(ds, fc))
+    assert (it["lead_time_days"], it["lead_time_source"]) == (120, "supplier")

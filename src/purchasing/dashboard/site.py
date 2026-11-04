@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 from collections import defaultdict
 from datetime import date
 from html import escape
@@ -50,10 +51,7 @@ def _item_fact(row, field):
     return _fact(row[field], f"items.{row['sku_id']}.{field}", f"facts.json → items[].{field} · {source}")
 
 
-def _note(text, scope):
-    if text is None:
-        return ""
-    label = "Пояснение ИИ, цифры проверены" if text.source == "ai" else "Шаблон"
+def _note_tooltip(text, scope):
     sources = []
     for key in text.used_facts:
         if key == "plan_date":
@@ -64,7 +62,14 @@ def _note(text, scope):
             sources.append(TOTALS[key][1])
         elif key == "forecast_accuracy.warning":
             sources.append("предупреждение из бэктеста")
-    tooltip = escape("facts.json · " + " / ".join(dict.fromkeys(sources))) if sources else "facts.json"
+    return "facts.json · " + " / ".join(dict.fromkeys(sources)) if sources else "facts.json"
+
+
+def _note(text, scope):
+    if text is None:
+        return ""
+    label = "Пояснение ИИ, цифры проверены" if text.source == "ai" else "Шаблон"
+    tooltip = escape(_note_tooltip(text, scope))
     return (f'<div class="note"><span class="provenance">{label}</span>'
             f'<p title="{tooltip}">{escape(text.text)}</p></div>')
 
@@ -209,52 +214,61 @@ def _risks(totals, anomalies):
 </section>"""
 
 
-def _forecast(row):
-    values = row["monthly_forecast"]
-    if not values:
-        return '<p class="empty">Помесячный прогноз: в данных нет.</p>'
-    peak = max(max(qty for _, qty in values), 1)
-    coords = [(32 + 536 * i / max(len(values) - 1, 1), 112 - 93 * qty / peak)
-              for i, (_, qty) in enumerate(values)]
-    points = []
-    for (x, y), (month, qty) in zip(coords, values, strict=True):
-        key = f"items.{row['sku_id']}.monthly_forecast.{month}"
-        attrs = _fact_attrs(qty, key, f"facts.json → items[].monthly_forecast · {MONTHLY_SOURCE}")
-        source = escape(MONTHLY_SOURCE)
-        points.append(
-            f'<circle cx="{x:.2f}" cy="{y:.2f}" r="4" {attrs}>'
-            f'<title>{month} · {_shown(qty)} шт. · {source}</title></circle>'
-        )
-    line = " ".join(f"{x:.2f},{y:.2f}" for x, y in coords)
-    labels = "".join(f'<text x="{x:.2f}" y="135">{month[5:7]}.{month[2:4]}</text>'
-                     for (x, _), (month, _) in zip(coords, values, strict=True)
-                     if month in (values[0][0], values[-1][0]))
-    return f"""
-<figure class="chart">
-  <figcaption>Прогноз спроса по месяцам <span>шт. за месяц</span></figcaption>
-  <svg viewBox="0 0 600 144" role="img" aria-label="Помесячный прогноз спроса, штук за месяц">
-    <path class="gridlines" d="M32 20H568 M32 66H568 M32 112H568" />
-    <polyline points="{line}" />{"".join(points)}
-    <g class="chart-label" title="facts.json → items[].monthly_forecast"> {labels}</g>
-  </svg>
-</figure>"""
+STATUS_TAGS = (("danger", "Риск дефицита"), ("warning", "Риск излишка"), ("", "Заказать сейчас"), ("", "Пересмотр цены"))
 
 
-def _cards(rows, texts):
-    cards = []
+def _status_codes(row):
+    """Номера тегов статуса в STATUS_TAGS — в том же порядке, что и `_status`."""
+    return [index for index, on in enumerate((
+        row["shortage_risk"], row["overstock_risk"], row["order_now"] and has_order(row), not row["in_auto_purchase"],
+    )) if on]
+
+
+def _value(value):
+    """[сырое значение для data-value, подпись на странице] или None, если данных нет."""
+    return None if value is None else ["" if value is None else str(value), _shown(value)]
+
+
+def _card_data(rows, texts):
+    """Данные карточек для страницы: карточка собирается в браузере при открытии (так страница втрое легче).
+
+    Здесь только публичные поля. Подписи и значения готовит Python, JS ничего не считает и не форматирует.
+    """
+    fields = {**ITEM_NUMBERS, **ITEM_DATES}
+    tooltips, cards = [], {}
     for row in rows:
-        sku = row["sku_id"]
-        details = "".join(f'<div><dt>{(ITEM_NUMBERS | ITEM_DATES)[key][0]}</dt>'
-                          f'<dd>{_item_fact(row, key)}</dd></div>' for key in CARD_FIELDS)
-        cards.append(f"""
-<template id="card-{sku}">
-  <p class="eyebrow">{category_label(row["category"])}</p><h2 id="product-title">{sku}</h2>
-  <p class="status-line">{_status(row)}</p>
-  {_forecast(row)}
-  <dl class="facts-grid">{details}</dl>
-  {_note(texts.items.get(sku), "item")}
-</template>""")
-    return '<dialog id="product" aria-labelledby="product-title"><form method="dialog" class="close">'            '<button class="button secondary" autofocus>Закрыть</button></form><div id="product-body"></div></dialog>' + "".join(cards)
+        note = None
+        text = texts.items.get(row["sku_id"])
+        if text is not None:
+            tip = _note_tooltip(text, "item")
+            if tip not in tooltips:
+                tooltips.append(tip)
+            note = [text.source == "ai", text.text, tooltips.index(tip)]
+        cards[row["sku_id"]] = [
+            category_label(row["category"]), _status_codes(row),
+            [_value(row[key]) for key in CARD_FIELDS],
+            [[month, *_value(qty)] for month, qty in row["monthly_forecast"]],
+            note,
+        ]
+    return {
+        "nodata": NO_DATA,
+        "tags": STATUS_TAGS,
+        "fields": [[key, fields[key][0], f"facts.json → items[].{key} · {fields[key][1]}"] for key in CARD_FIELDS],
+        "monthly_source": MONTHLY_SOURCE,
+        "tooltips": tooltips,
+        "cards": cards,
+    }
+
+
+def _data_script(data):
+    """JS-объявление с данными. «<» экранируется, чтобы текст не мог закрыть тег script."""
+    raw = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return "\nconst CARD_DATA = " + raw.replace("<", "\\u003c").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029") + ";\n"
+
+
+def _cards():
+    return ('<dialog id="product" aria-labelledby="product-title"><form method="dialog" class="close">'
+            '<button class="button secondary" autofocus>Закрыть</button></form><div id="product-body"></div></dialog>')
 
 
 def _review_total(totals, key, suffix):
@@ -278,16 +292,19 @@ def _reviews(facts, live_codes):
             '<span class="tag warning">Заканчивается</span>' if row.get("ending") is True else "—",
         ])
 
-    removed = []
-    list_key = "discontinue" if "discontinue" in lists else "sell_off"
+    # «Вывести» — все мёртвые товары (нет продаж 12 мес.); «Распродать остаток» — только те, у кого есть остаток.
+    has_full_list = "discontinue" in lists
+    list_key = "discontinue" if has_full_list else "sell_off"
+    removed, sell_off = [], []
     for row in sorted(lists.get(list_key, ()), key=lambda row: (not bool(number(row.get("stock"))), row["sku_id"])):
         sku = code(row["sku_id"])
         stock = number(row.get("stock"))
-        removed.append([
-            _item_link(sku, False), category_label(category(row.get("category"))),
-            list_fact(stock, list_key, sku, "stock", ITEM_NUMBERS["stock"][1]),
-            "Распродать остаток" if stock else "Вывести из ассортимента",
-        ])
+        cells = [_item_link(sku, False), category_label(category(row.get("category"))),
+                 list_fact(stock, list_key, sku, "stock", ITEM_NUMBERS["stock"][1])]
+        if has_full_list:
+            removed.append(cells)
+        if stock:
+            sell_off.append(cells)
 
     ask = []
     for row in lists.get("ask_supplier", ()):
@@ -299,6 +316,14 @@ def _reviews(facts, live_codes):
             list_fact(number(row.get("qty")), "ask_supplier", sku, "qty", "purchase_orders.csv → qty_pending"),
         ])
 
+    discontinue_fold = ""
+    if has_full_list:
+        discontinue_fold = f"""<details class="panel fold">
+      <summary>Вывести из ассортимента (нет продаж 12 мес.) {_review_total(totals, "dead_total", "поз.")}</summary>
+      <p class="fold-note">Все товары без продаж за последние 12 месяцев. Остаток есть не у всех: он вынесен в список «Распродать остаток».</p>
+      {_table(("Код товара", "Категория", "На складе, шт."), removed)}
+    </details>"""
+
     return f"""
 <section id="reviews" class="section" aria-labelledby="reviews-heading">
   <div class="section-heading"><div><p class="eyebrow">Ручная работа</p><h2 id="reviews-heading">Списки на пересмотр</h2>
@@ -309,10 +334,11 @@ def _reviews(facts, live_codes):
       <p class="fold-note">Запас заканчивается у {_total(totals, "price_review_ending_items")} позиций.</p>
       {_table(("Код товара", "Категория", "Наценка, %", "На складе, шт.", "Запас, дни", "Статус"), price)}
     </details>
+    {discontinue_fold}
     <details class="panel fold">
-      <summary>Распродать / вывести {_review_total(totals, "dead_total" if list_key == "discontinue" else "sell_off_items", "поз.")}</summary>
-      <p class="fold-note">Остаток к распродаже: {_total(totals, "sell_off_qty")} шт. на {_total(totals, "sell_off_items")} поз.</p>
-      {_table(("Код товара", "Категория", "На складе, шт.", "Действие"), removed)}
+      <summary>Распродать остаток <span class="fold-count">{_total(totals, "sell_off_items")} поз., {_total(totals, "sell_off_qty")} шт.</span></summary>
+      <p class="fold-note">На складе осталось {_total(totals, "sell_off_qty")} шт. на {_total(totals, "sell_off_items")} поз.: это мёртвые товары (нет продаж 12 мес.), которые ещё лежат на складе.</p>
+      {_table(("Код товара", "Категория", "На складе, шт."), sell_off)}
     </details>
     <details id="supplier-review" class="panel fold">
       <summary>Уточнить у поставщика {_review_total(totals, "ask_supplier_items", "зак.")}</summary>
@@ -345,7 +371,7 @@ def build_site(facts, texts, out_dir) -> Path:
         ("live_total", "позиций в расчёте", ""),
     ))
     css = (ASSETS / "dashboard.css").read_text(encoding="utf-8")
-    script = (ASSETS / "dashboard.js").read_text(encoding="utf-8")
+    script = (ASSETS / "dashboard.js").read_text(encoding="utf-8") + _data_script(_card_data(rows, texts))
     policy = (f"default-src 'none'; script-src 'sha256-{_csp_hash(script)}'; "
               f"style-src 'sha256-{_csp_hash(css)}'; base-uri 'none'; form-action 'none'; img-src data:")
     markup = f"""<!doctype html>
@@ -381,7 +407,7 @@ def build_site(facts, texts, out_dir) -> Path:
   {_recommendations(rows)}
   {_calendar(rows)}
   {_risks(totals, texts.anomalies)}
-  {_cards(rows, texts)}
+  {_cards()}
   {_reviews(facts, {row["sku_id"] for row in rows})}
   <footer>Значения взяты из расчёта Python. Источник указан в подсказке у значения.</footer>
 </main>

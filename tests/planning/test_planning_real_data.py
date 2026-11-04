@@ -111,3 +111,48 @@ def test_lead_distribution_close_to_readme(plan):
     # (planned <= 0, 74 заказа) отброшен, поэтому p25 выше (101); медиана и p90 те же.
     d = plan.to_facts()["lead_time_distribution"]["orders_planned"]
     assert 90 <= d["p25"] <= 115 and 115 <= d["median"] <= 140 and 190 <= d["p90"] <= 220
+
+
+def _need(it):
+    # потребность до округления: цель − остаток − всё, что в пути (в том числе просроченное, которое считаем в пути)
+    return max((it["target_stock"] or 0) - it["stock"] - it["in_transit_qty"], 0)
+
+
+def test_order_is_not_inflated_by_batch_step(plan):
+    # Порог 1,3 подобран по данным: после правки заказ ≈ 1,05 потребности (до правки было 2,6).
+    # Округление вверх до мелкого круглого шага не может дать больше +10…+100 шт. на позицию.
+    ordered = [i for i in plan.items if i["in_auto_purchase"] and (i["order_qty"] or 0) > 0]
+    total_order = sum(i["order_qty"] for i in ordered)
+    total_need = sum(_need(i) for i in ordered)
+    assert total_order <= 1.3 * total_need, (total_order, total_need)
+    assert all(i["order_qty"] >= _need(i) - 1e-6 for i in ordered), "нижнюю границу (потребность) не режем"
+
+
+def test_big_overshoot_only_with_min_batch_flag(plan):
+    # Заказ больше потребности в 3+ раза допустим только если (а) перебор не больше 10 шт. — это
+    # округление крошечной потребности до шага 10, или (б) стоит флаг possible_min_batch.
+    bad = [
+        i["sku_id"] for i in plan.items
+        if (i["order_qty"] or 0) > 0 and i["order_qty"] > 3 * _need(i) and i["order_qty"] - _need(i) > 10
+        and "possible_min_batch" not in i["flags"]
+    ]
+    assert not bad, bad
+
+
+def test_flag_has_note_and_example_skus(plan):
+    flagged = [i for i in plan.items if "possible_min_batch" in i["flags"]]
+    assert flagged
+    assert all("возможна минимальная партия" in i["batch_step_note"] for i in flagged)
+    by = {i["sku_id"]: i for i in plan.items}
+    assert by["SKU-197B08"]["order_qty"] < 7000 and by["SKU-026A51"]["batch_step"] != 550
+
+
+def test_supplier_640208_lead_is_median_of_all_valid_planned_orders(ds, plan):
+    # Правка 2: плечо 133 — медиана planned_lead_days по ВСЕМ 29 годным (1…400) заказам поставщика, а не по подмножеству с приходами.
+    # 164,5 получается только если не отбрасывать 5 строк заказа PO-2165B7 со сроком 444 дня (> lead_max_days = 400).
+    o = ds.orders
+    o = o[(o["supplier_id"] == "SUP-640208") & (o["planned_lead_days"] >= 1) & (o["planned_lead_days"] <= 400)]
+    assert len(o) == 29 and o["planned_lead_days"].median() == 133
+    for sku in ("SKU-026A51", "SKU-3C1D79", "SKU-577B69", "SKU-65A338", "SKU-731022", "SKU-8565D2", "SKU-895690", "SKU-C14FBD"):
+        it = plan.item(sku)
+        assert (it["lead_time_days"], it["lead_time_source"]) == (133, "supplier"), sku

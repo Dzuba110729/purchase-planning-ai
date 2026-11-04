@@ -27,7 +27,7 @@ ITEM_KEYS = {
     "overdue_excluded_qty", "daily_demand", "stock_days", "stock_days_note", "runout_days", "runout_date",
     "lead_time_days", "lead_time_source", "lead_time_note", "cover_days", "cover_source", "cover_note",
     "demand_lead_cover", "service_level", "safety_stock", "safety_note", "target_stock", "batch_step",
-    "batch_step_source", "order_qty", "order_qty_note", "next_order_date", "next_order_note", "order_now",
+    "batch_step_source", "batch_step_note", "order_qty", "order_qty_note", "next_order_date", "next_order_note", "order_now",
     "shortage_risk", "unavoidable_shortage", "overstock_risk", "flags", "notes", "missing", "monthly_forecast",
 }
 LIST_KEYS = {"price_review": {"sku_id", "category", "markup_pct", "stock", "stock_days", "ending"},
@@ -36,7 +36,7 @@ LIST_KEYS = {"price_review": {"sku_id", "category", "markup_pct", "stock", "stoc
              "ask_supplier": {"sku_id", "po_id", "supplier_id", "qty", "days_overdue", "promised_date"}}
 ACCURACY_KEYS = {"warning", "computed", "backtest_plan_date", "horizon_months", "categories"}
 PARAMS_KEYS = {"cover_min_days", "cover_max_days", "overdue_max_days", "overstock_days", "overstock_months",
-               "default_batch_step", "abc_bounds", "service_levels", "z_values", "min_markup_pct",
+               "batch_step_ladder", "min_orders_for_batch_step", "history_step_max_share", "min_batch_flag_ratio", "abc_bounds", "service_levels", "z_values", "min_markup_pct",
                "min_orders_for_supplier_lead", "min_receipt_dates_for_cover", "lead_max_days",
                "sigma_window_months", "new_item_months", "new_item_cv", "fallback_window_days",
                "sigma_outlier_cap_mult", "safety_cap"}
@@ -80,7 +80,7 @@ def test_facts_schema_is_stable(facts_file):
     assert f["params"]["cover_min_days"] == 60 and f["params"]["cover_max_days"] == 120
     assert f["params"]["service_levels"] == {"A": 0.95, "B": 0.90, "C": 0.80}
     assert f["params"]["overdue_max_days"] == 90 and f["params"]["overstock_months"] == 12
-    assert f["params"]["default_batch_step"] == 10
+    assert f["params"]["batch_step_ladder"] == [[300, 10], [3000, 50], [None, 100]]
     assert f["items"] and all(set(i) == ITEM_KEYS for i in f["items"])
     for name, keys in LIST_KEYS.items():
         assert f["lists"][name], name
