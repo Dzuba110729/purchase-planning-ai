@@ -53,3 +53,9 @@
 - `Text(text, used_facts, insufficient_data, source, model)`. Для отображения использовать `text` как обычный текст и показывать происхождение из `source` (`ai` или `template`). Числа закупки и даты брать из `facts.json`.
 - DeepSeek выбирает и упорядочивает фразы из вариантов, построенных из паспорта. Код сверяет фразы целиком, проверяет объединение ссылок на факты и согласованность флага отсутствия данных. Шаблон строится из тех же вариантов.
 - `python -m purchasing.ai.acceptance [--facts out/facts.json] [--off-peak]` требует `DEEPSEEK_API_KEY` в окружении процесса. Отчёт с текстами и журнал запросов остаются в закрытой папке `out/ai-private/`. Оценка стоимости использует тариф пиковых часов по умолчанию. `--off-peak` применяет тариф вне пика.
+
+### Таск 06 (dashboard)
+
+- `build_site(facts, texts, out_dir) -> Path` записывает самодостаточный `index.html` со ссылкой на `order.xlsx`. `build_xlsx(facts, path) -> Path` записывает книгу со строками заказа и сводкой.
+- `uv run purchasing dashboard [--facts out/facts.json] [--out out/dashboard]` создаёт оба файла с шаблонными пояснениями без запросов к API. Для проверенных пояснений ИИ вызывающая сторона передаёт `Texts` в `build_site`.
+- В `facts.json` версии 1 добавлены `items[].monthly_forecast[{month,qty}]`, `lists.discontinue[{sku_id,category,stock}]` и счётчики `totals.weight_known_items`, `open_order_items`, `overdue_order_items`, `overdue_order_qty`. Дашборд читает и прежний формат.
