@@ -36,3 +36,12 @@
 - `build_forecast(dataset, plan_date=None, params=DEFAULT_PARAMS, horizon=18) -> Forecast(monthly[sku_id,category,month,qty], profile[категория×1..12], level, adjusted_history, lost_months; for_sku(), sum_months())`
 - `backtest(dataset, plan_date=2025-08-13, params) -> BacktestResult(table, detail, wape(cat,"model"|"base"), better())`; `fit()`, `Params`, `format_backtest()`, `forecast.plots.plot_backtest()`
 - CLI: `uv run purchasing backtest [--data-dir] [--plots-dir]`
+
+### Таск 04 (planning)
+- `build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan` (`items`, `lists`, `totals`, `forecast_accuracy`, `params`; `.item(sku)`, `.to_facts()`); `write_facts(plan, path) -> Path`; `FACTS_SCHEMA_VERSION = 1`.
+- CLI: `uv run purchasing facts [--data-dir] [--plan-date] [--out out/facts.json]` (ошибка данных → код 2). `out/` и `facts.json` в `.gitignore`.
+- `facts.json`, верхний уровень: `schema_version, plan_date, plan_date_source, generated_from{sku_rows,sales_rows,stock_rows,order_rows,receipt_rows,supplier_rows}, params{...}, totals, items[], lists, forecast_accuracy`.
+- `totals`: live_total, dead_total, auto_purchase_items, order_qty_total, order_now_items, shortage_risk_items, shortage_risk_auto_items, overstock_risk_items, overstock_risk_auto_items, price_review_items, price_review_ending_items, sell_off_items, sell_off_qty, ask_supplier_items, ask_supplier_qty.
+- `items[]` (по каждому живому товару): sku_id, category, supplier_id|null, supply_type, markup_pct, abc_group, importance, in_auto_purchase, exclusion_reason, stock, in_transit_qty, overdue_included_qty, overdue_excluded_qty, daily_demand, stock_days(+_note), runout_days, runout_date, lead_time_days(+source,+note), cover_days(+source,+note), demand_lead_cover, service_level, safety_stock, safety_note, safety_capped, target_stock, batch_step, batch_step_source, order_qty|null(+_note), next_order_date|null(+_note), order_now, shortage_risk, unavoidable_shortage, overstock_risk, flags[], notes[], missing[]. Нет данных = null + пометка, число не выдумывается.
+- `lists`: price_review[{sku_id,category,markup_pct,stock,stock_days,ending}], sell_off[{sku_id,category,stock}], ask_supplier[{sku_id,po_id|null,supplier_id|null,qty,days_overdue,promised_date}].
+- `forecast_accuracy`: {warning, computed, backtest_plan_date, horizon_months, categories[{category,skus,fact_units,wape_model,wape_base,model_better}]}.
