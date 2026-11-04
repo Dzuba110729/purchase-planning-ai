@@ -2,7 +2,7 @@
 
 Структура (ключи английские, русский — только в текстовых полях):
 schema_version, plan_date, plan_date_source, generated_from{счётчики строк}, params{границы},
-totals{итоги}, items[по живому товару], lists{price_review, sell_off, ask_supplier},
+totals{итоги}, lead_time_distribution{items, orders_planned, by_source, by_supply_type, by_category: n/p25/median/p90}, items[по живому товару], lists{price_review, sell_off, ask_supplier},
 forecast_accuracy{warning, computed, backtest_plan_date, horizon_months, categories[WAPE]}.
 Пустое значение — `null`; причина — в `*_note` или в `missing[]` товара. NaN/inf не пишутся.
 """
@@ -44,6 +44,7 @@ def plan_to_facts(plan) -> dict:
         "totals": plan.totals,
         "items": plan.items,
         "lists": plan.lists,
+        "lead_time_distribution": plan.lead_time_distribution,
         "forecast_accuracy": plan.forecast_accuracy,
     })
 

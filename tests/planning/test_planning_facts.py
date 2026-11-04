@@ -14,7 +14,7 @@ from planning_helpers import PLAN, make_forecast, open_order, history_orders
 ROOT = Path(__file__).resolve().parents[2]
 
 TOP_KEYS = {"schema_version", "plan_date", "plan_date_source", "generated_from", "params", "totals",
-            "items", "lists", "forecast_accuracy"}
+            "items", "lists", "forecast_accuracy", "lead_time_distribution"}
 GENERATED_KEYS = {"sku_rows", "sales_rows", "stock_rows", "order_rows", "receipt_rows", "supplier_rows"}
 TOTALS_KEYS = {"live_total", "dead_total", "auto_purchase_items", "order_qty_total", "order_now_items",
                "shortage_risk_items", "shortage_risk_auto_items", "overstock_risk_items",
@@ -82,6 +82,9 @@ def test_facts_schema_is_stable(facts_file):
     for name, keys in LIST_KEYS.items():
         assert f["lists"][name], name
         assert all(set(x) == keys for x in f["lists"][name]), name
+    ld = f["lead_time_distribution"]
+    assert set(ld) == {"items", "orders_planned", "by_source", "by_supply_type", "by_category"}
+    assert set(ld["items"]) == {"n", "p25", "median", "p90"} and ld["items"]["n"] == 3
     assert set(f["forecast_accuracy"]) == ACCURACY_KEYS
     assert "ориентир по сумме за период" in f["forecast_accuracy"]["warning"]
     assert f["forecast_accuracy"]["computed"] is False and f["forecast_accuracy"]["categories"] == []

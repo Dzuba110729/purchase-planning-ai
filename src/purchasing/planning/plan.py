@@ -2,8 +2,10 @@
 
 Правила (из брифа, не менять):
 
-1. Плечо — по поставщику; у `supply_type = unknown` / без поставщика / без истории —
-   медиана по категории; нет и её — `null` + «нет данных» (число не выдумываем).
+1. Плечо — плановое (`planned_lead_days`): медиана по поставщику (>= 3 заказов, мусор <= 0
+   и > 400 отброшен); у `supply_type = unknown` / без поставщика / без истории — медиана по
+   категории; нет и её — `null` + «нет данных». Фактическое опоздание в плечо не добавляется,
+   оно только сдвигает просроченные заказы в пути.
 2. Покрытие — по ритму поставщика, 60–120 дней; нет данных — медиана по поставщикам.
 3. ABC: важность = среднемесячные продажи за полные месяцы × дециль цены × наценка;
    товары по убыванию важности, группа по накопленной доле ДО товара: < 80% — A,
@@ -11,8 +13,10 @@
    Страховой запас = z(уровень сервиса) × σ месячного спроса × sqrt(плечо / 30),
    z: A 0,95 / B 0,90 / C 0,80; σ — выборочное стандартное отклонение продаж по
    полным месяцам за последние 12 (пропуск = 0), выбросы обрезаны потолком прогноза
-   (4 × медиана ненулевых месяцев товара). Запас не больше спроса за (плечо + покрытие)
-   товара; сработал потолок — флаг safety_capped и пометка в safety_note. Меньше 6 месяцев истории (новый
+   (4 × медиана ненулевых месяцев товара). Спрос = продажи − возвраты по месяцам.
+   «Мало истории» — меньше NEW_ITEM_MONTHS (3) полных месяцев от первой продажи товара
+   до месяца плана (пропуск внутри окна = 0, это не «мало»). Запас не больше спроса за (плечо + покрытие)
+   товара; сработал потолок — флаг safety_capped и пометка в safety_note. Меньше 3 месяцев истории (новый
    товар) — σ = 50% среднемесячного спроса, с пометкой.
 4. Просроченные заказы (обещано < даты плана): просрочка <= 90 дней — в пути, приход =
    обещанная дата + обычное опоздание поставщика (не раньше даты плана; нет данных —
@@ -45,7 +49,7 @@ from .params import (
 )
 from purchasing.forecast.model import DEFAULT_PARAMS as FORECAST_PARAMS, _winsorize
 
-from .stats import batch_step_for, history_stats
+from .stats import batch_step_for, history_stats, planned_orders
 
 EPS = 1e-9
 NO_DATA = "нет данных"
@@ -62,6 +66,7 @@ class PurchasePlan:
     totals: dict
     forecast_accuracy: dict
     params: dict = field(default_factory=lambda: dict(PARAMS_FOR_FACTS))
+    lead_time_distribution: dict = field(default_factory=dict)
 
     def item(self, sku_id: str) -> dict:
         for it in self.items:
@@ -175,7 +180,8 @@ def build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan
 
     full = ds.full_months_sales()
     full = full[full["month"] < pmonth]
-    sales_by_sku = {k: g.set_index("month")["qty_sold"].astype(float) for k, g in full.groupby("sku_id")}
+    net = (full["qty_sold"].astype(float) - full["qty_returned"].astype(float)).clip(lower=0)  # возвраты вычтены
+    sales_by_sku = {k: g.set_index("month")["net"] for k, g in full.assign(net=net).groupby("sku_id")}
 
     # заказы в пути / просроченные
     oo = ds.open_orders
@@ -219,11 +225,13 @@ def build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan
 
         # плечо
         by_supplier = supplier is not None and supply_type != "unknown"
-        lead, lead_src = None, None
+        lead, lead_src, lead_note = None, None, NO_DATA
         if by_supplier and supplier in st.supplier_lead:
             lead, lead_src = st.supplier_lead[supplier], "supplier"
+            lead_note = "плановое плечо: медиана planned_lead_days заказов поставщика"
         elif category in st.category_lead:
             lead, lead_src = st.category_lead[category], "category"
+            lead_note = "плановое плечо: медиана planned_lead_days по категории"
             flg.append("lead_by_category")
             notes.append("плечо взято как медиана по категории: у поставщика нет своей истории")
         if lead is None:
@@ -354,7 +362,7 @@ def build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan
             "overdue_excluded_qty": int(overdue_out),
             "daily_demand": _round(daily, 3), "stock_days": _round(stock_days, 1), "stock_days_note": sd_note,
             "runout_days": k, "runout_date": (pdate + timedelta(days=k)).isoformat() if k is not None else None,
-            "lead_time_days": lead, "lead_time_source": lead_src, "lead_time_note": NO_DATA if lead is None else None,
+            "lead_time_days": lead, "lead_time_source": lead_src, "lead_time_note": lead_note,
             "cover_days": cover, "cover_source": cover_src, "cover_note": NO_DATA if cover is None else None,
             "demand_lead_cover": _round(d_window, 2) if target is not None else None,
             "service_level": SERVICE_LEVELS[group], "safety_stock": _round(safety, 2), "safety_note": safety_note,
@@ -369,6 +377,7 @@ def build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan
     lists = _build_lists(ds, by, ask_rows, pdate)
     totals = _totals(ds, items, lists)
     return PurchasePlan(
+        lead_time_distribution=_lead_distribution(items, planned_orders(ds, pdate)),
         plan_date=pdate, plan_date_source=ds.plan_date_source,
         generated_from={
             "sku_rows": len(ds.sku), "sales_rows": len(ds.sales), "stock_rows": int(ds.raw_stock_rows),
@@ -415,6 +424,31 @@ def _totals(ds, items, lists):
         "price_review_ending_items": sum(1 for x in lists["price_review"] if x["ending"]),
         "sell_off_items": len(lists["sell_off"]), "sell_off_qty": int(sum(x["stock"] for x in lists["sell_off"])),
         "ask_supplier_items": len(lists["ask_supplier"]), "ask_supplier_qty": int(sum(x["qty"] for x in lists["ask_supplier"])),
+    }
+
+
+def _pct(values) -> dict:
+    v = np.asarray([x for x in values if x is not None], dtype=float)
+    if not len(v):
+        return {"n": 0, "p25": None, "median": None, "p90": None}
+    q = np.percentile(v, [25, 50, 90])
+    return {"n": int(len(v)), "p25": round(float(q[0]), 1), "median": round(float(q[1]), 1), "p90": round(float(q[2]), 1)}
+
+
+def _lead_distribution(items, po) -> dict:
+    """Распределение плеча по товарам (p25/медиана/p90) и по плановым заказам — для сверки с README."""
+    def by(key):
+        groups = {}
+        for i in items:
+            groups.setdefault(i[key] if i[key] is not None else "none", []).append(i["lead_time_days"])
+        return {k: _pct(v) for k, v in sorted(groups.items())}
+
+    return {
+        "items": _pct([i["lead_time_days"] for i in items]),
+        "orders_planned": _pct(po["planned"].tolist()),
+        "by_source": by("lead_time_source"),
+        "by_supply_type": by("supply_type"),
+        "by_category": by("category"),
     }
 
 

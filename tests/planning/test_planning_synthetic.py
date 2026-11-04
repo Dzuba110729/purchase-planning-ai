@@ -77,10 +77,10 @@ def test_order_in_transit_counts_toward_stock(world):
 
 
 def test_overdue_up_to_90_days_is_in_transit_shifted_by_usual_delay(world):
-    # История поставщика: обещали через 20 дней, пришло через 60 -> обычное опоздание 40 дней.
+    # История поставщика: плановое плечо 60, пришло через 100 -> обычное опоздание 40 дней.
     # Просрочка 17 дней (обещано 15.12.2025), 80 шт -> в пути, придёт 15.12 + 40 = 24.01.2026 (день 23).
     # Остаток 10: кончится в день 10, до прихода -> дефицит, хотя «на бумаге» заказ уже должен был прийти.
-    hist = history_orders("SUP1", "S1", lead=60, promised_lead=20)
+    hist = history_orders("SUP1", "S1", lead=100, promised_lead=60)
     ds, fc = world(10, {"S1": 1.0}, history=hist,
                    extra_orders=[open_order("PO-2", "S1", "SUP1", date(2025, 12, 15), 80)])
     plan = build_plan(ds, fc)
@@ -216,3 +216,48 @@ def test_safety_stock_capped_by_demand_over_lead_plus_cover(world):
     assert it["safety_stock"] == pytest.approx(15)
     assert "ограничен" in it["safety_note"] and "safety_capped" in it["flags"]
     assert it["target_stock"] == pytest.approx(30) and it["order_qty"] == 50
+
+
+def test_lead_time_is_planned_not_first_receipt(world):
+    # плановое плечо 120 дней, но приходы фиксировались через 10 дней (частичные/чужие приходы): плечо = 120
+    hist = history_orders("SUP1", "S1", lead=10, promised_lead=120)
+    ds, fc = world(100, {"S1": 1.0}, history=hist)
+    it = item(build_plan(ds, fc))
+    assert it["lead_time_days"] == 120 and it["lead_time_source"] == "supplier"
+    assert "planned_lead_days" in it["lead_time_note"]
+
+
+def test_lead_time_drops_junk_planned_values(world):
+    # 3 нормальных заказа с плечом 60 и 5 мусорных: плечо -13 (запись задним числом) и 900 (> 400) -> медиана 60
+    o, r = history_orders("SUP1", "S1", lead=60, promised_lead=60)
+    junk = []
+    for i, pl in enumerate([-13, -13, -13, 900, 900]):
+        j = dict(o[0]); j.update(po_id=f"J{i}", planned_lead_days=pl); junk.append(j)
+    ds, fc = world(100, {"S1": 1.0}, history=([*o, *junk], r))
+    assert item(build_plan(ds, fc))["lead_time_days"] == 60
+
+
+def test_lead_time_category_median_for_unknown_supply(world):
+    # поставщика нет в данных: плечо = медиана planned_lead_days заказов категории c (все заказы мира: 60)
+    ds, fc = world(10, {"S1": 1.0, "U": 1.0}, extra_skus=[{"sku_id": "U", "supplier_id": None, "supply_type": "unknown"}])
+    it = item(build_plan(ds, fc), "U")
+    assert (it["lead_time_days"], it["lead_time_source"]) == (60, "category")
+
+
+def test_safety_stock_uses_demand_net_of_returns(world):
+    # продано по 40 в месяц, в 6 месяцах возвращено 10: спрос 40 (6 раз) и 30 (6 раз).
+    # Среднее 35, отклонения ±5, σ = sqrt(12*25/11) = 5.2223. Группа A: 1.6449 * 5.2223 * sqrt(2) = 12.15.
+    # (по валовым продажам σ = 0 и запас 0.)
+    ds, fc = world(500, {"S1": 1.0}, monthly_sales={"S1": [40] * 12}, monthly_returns={"S1": [0, 10] * 6})
+    assert item(build_plan(ds, fc))["safety_stock"] == pytest.approx(12.15, abs=0.05)
+
+
+def test_four_months_of_history_is_enough_for_real_sigma(build):
+    # товар продаётся 4 полных месяца (сен-дек 2025): 10, 20, 30, 40 -> среднее 25, выборочная σ = sqrt(500/3) = 12.91.
+    # Мало истории — только < 3 месяцев. Группа A: 1.6449 * 12.91 * sqrt(60/30) = 30.03.
+    o, r = history_orders("SUP1", "S1", lead=60, promised_lead=60)
+    ds = build([{"sku_id": "S1", "supplier_id": "SUP1", "first_sale_month": "2025-09"}], stock={"S1": 500},
+               orders=o, receipts=r, monthly_sales={"S1": [10, 20, 30, 40]})
+    it = build_plan(ds, make_forecast({"S1": 1.0})).item("S1")
+    assert it["safety_stock"] == pytest.approx(30.03, abs=0.05)
+    assert "safety_simplified" not in it["flags"] and it["safety_note"] is None

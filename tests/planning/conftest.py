@@ -15,7 +15,7 @@ def build():
     monthly_sales: {sku: [qty за каждый полный месяц от first_sale_month до месяца перед планом]}.
     """
 
-    def _build(skus, stock=None, orders=(), receipts=(), monthly_sales=None, plan_date=PLAN):
+    def _build(skus, stock=None, orders=(), receipts=(), monthly_sales=None, plan_date=PLAN, monthly_returns=None):
         pm = pd.Period(plan_date, freq="M")
         sku_rows, sales_rows = [], []
         for s in skus:
@@ -32,9 +32,10 @@ def build():
             if vals is None:
                 vals = [30] * len(months)
             assert len(vals) == len(months), (s["sku_id"], len(vals), len(months))
+            base = len(sales_rows)
             for m, q in zip(months, vals):
                 sales_rows.append({"sku_id": s["sku_id"], "category": s.get("category", "c"), "month": m,
-                                   "qty_sold": q, "qty_returned": 0, "orders_cnt": 1, "markup_pct": 40.0,
+                                   "qty_sold": q, "qty_returned": ((monthly_returns or {}).get(s["sku_id"]) or [0] * len(months))[len(sales_rows) - base], "orders_cnt": 1, "markup_pct": 40.0,
                                    "partial_month": 0})
         stock_rows = [{"sku_id": k, "month": pm, "stock_qty": v, "restored": False} for k, v in (stock or {}).items()]
         for s in skus:  # нет строки = остаток 0 (как после восстановления в модуле данных)
@@ -59,12 +60,12 @@ def world(build):
     """
     orders, receipts = history_orders("SUP1", "S1", lead=60, promised_lead=60)
 
-    def _w(stock, rates, extra_orders=(), extra_skus=(), extra_stock=None, monthly_sales=None, history=None):
+    def _w(stock, rates, extra_orders=(), extra_skus=(), extra_stock=None, monthly_sales=None, history=None, monthly_returns=None):
         o, r = (orders, receipts) if history is None else history
         ds = build(
             [{"sku_id": "S1", "supplier_id": "SUP1"}, *extra_skus],
             stock={"S1": stock, **(extra_stock or {})}, orders=[*o, *extra_orders], receipts=r,
-            monthly_sales=monthly_sales,
+            monthly_sales=monthly_sales, monthly_returns=monthly_returns,
         )
         return ds, make_forecast(rates)
 

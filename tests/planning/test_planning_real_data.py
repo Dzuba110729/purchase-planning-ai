@@ -89,3 +89,25 @@ def test_command_facts_end_to_end(ds, tmp_path):
 def test_command_facts_data_error_exit_code(tmp_path, capsys):
     assert main(["facts", "--data-dir", str(tmp_path / "нет"), "--out", str(tmp_path / "f.json")]) == 2
     assert "Ошибка данных" in capsys.readouterr().err
+
+
+def test_lead_time_not_far_below_planned(ds, plan):
+    # плечо не в разы короче планового: у каждой категории медиана плеча товаров не ниже 50% медианы planned_lead_days
+    # категории; сверху не проверяем: товары сидят у разных поставщиков (space_heaters: основной поставщик с планом 256 дн.)
+    import numpy as np
+    o = ds.orders[(ds.orders["planned_lead_days"] >= 1) & (ds.orders["planned_lead_days"] <= 400)]
+    cat = ds.sku.set_index("sku_id")["category"]
+    planned = o.assign(c=o["sku_id"].map(cat)).groupby("c")["planned_lead_days"].median()
+    for c, ref in planned.items():
+        leads = [i["lead_time_days"] for i in plan.items if i["category"] == c and i["lead_time_days"]]
+        if leads:
+            assert np.median(leads) >= 0.5 * ref, (c, np.median(leads), ref)
+    gm = [i["lead_time_days"] for i in plan.items if i["category"] == "grain_mills"]
+    assert gm and min(gm) > 12
+
+
+def test_lead_distribution_close_to_readme(plan):
+    # README заказчика: плановое плечо p25 = 52, медиана 123, p90 = 205 по всем 660 заказам. У нас мусор
+    # (planned <= 0, 74 заказа) отброшен, поэтому p25 выше (101); медиана и p90 те же.
+    d = plan.to_facts()["lead_time_distribution"]["orders_planned"]
+    assert 90 <= d["p25"] <= 115 and 115 <= d["median"] <= 140 and 190 <= d["p90"] <= 220
