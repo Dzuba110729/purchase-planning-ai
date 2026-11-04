@@ -13,7 +13,7 @@ window.STATE =
   "skillDir": "/Users/aleksej_dzyuba/.agents/skills/autopilot",
   "baseCommit": "c0058e1",
   "startedAt": "2026-11-04T11:54:55+03:00",
-  "updatedAt": "2026-11-04T12:42:33+03:00",
+  "updatedAt": "2026-11-04T13:06:35+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -63,8 +63,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 91,
-    "done": 7,
-    "inTicket": 84,
+    "done": 11,
+    "inTicket": 80,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -151,9 +151,16 @@ window.STATE =
       ],
       "review": "нет",
       "model": "обычная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-04T13:00:01+03:00",
+      "finishedAt": "2026-11-04T13:06:35+03:00",
+      "tests": {
+        "passed": 52,
+        "failed": 0
+      },
+      "commit": "a8276ab"
     },
     {
       "id": "03",
@@ -425,7 +432,7 @@ window.STATE =
     }
   ],
   "tests": {
-    "passed": 7,
+    "passed": 52,
     "failed": 0
   },
   "debt": {
@@ -457,9 +464,11 @@ window.STATE =
     "2026-11-04T11:59:31+03:00",
     "2026-11-04T12:01:22+03:00",
     "2026-11-04T12:01:39+03:00",
-    "2026-11-04T12:42:33+03:00"
+    "2026-11-04T12:42:33+03:00",
+    "2026-11-04T13:00:01+03:00",
+    "2026-11-04T13:06:35+03:00"
   ],
-  "rev": 20,
+  "rev": 23,
   "waiting": null,
   "waits": [],
   "log": [
@@ -564,6 +573,38 @@ window.STATE =
         "passed": 7,
         "failed": 0
       }
+    },
+    {
+      "t": "2026-11-04T13:00:01+03:00",
+      "k": "ticket",
+      "ids": [
+        "02"
+      ],
+      "act": "start"
+    },
+    {
+      "t": "2026-11-04T13:06:35+03:00",
+      "k": "ticket",
+      "ids": [
+        "02"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 52,
+        "failed": 0
+      }
+    },
+    {
+      "t": "2026-11-04T13:06:35+03:00",
+      "k": "ticket",
+      "ids": [
+        "02"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 52,
+        "failed": 0
+      }
     }
   ],
   "reqList": [
@@ -605,17 +646,17 @@ window.STATE =
     {
       "id": "R08",
       "text": "«Дата плана — 13.08.2026 (дата выгрузки). Дата — параметр, при новых данных сдвигается сама.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R09",
       "text": "«Август не берём в средние»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R10",
       "text": "«нет строки = остаток 0»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R11",
@@ -720,7 +761,7 @@ window.STATE =
     {
       "id": "R31",
       "text": "«Чтение 6 CSV, проверка формата, восстановление нулевых остатков, разметка «мёртвый / низкая наценка / живой», отчёт о качестве»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R32",
