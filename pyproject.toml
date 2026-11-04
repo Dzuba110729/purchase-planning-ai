@@ -3,7 +3,10 @@ name = "purchasing"
 version = "0.1.0"
 description = "ИИ-система планирования закупок"
 requires-python = ">=3.12,<3.13"
-dependencies = ["pandas"]
+dependencies = [
+    "matplotlib>=3.11.2",
+    "pandas",
+]
 
 [project.scripts]
 purchasing = "purchasing.cli:main"
