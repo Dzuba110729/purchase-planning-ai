@@ -13,7 +13,7 @@ window.STATE =
   "skillDir": "/Users/aleksej_dzyuba/.agents/skills/autopilot",
   "baseCommit": "c0058e1",
   "startedAt": "2026-11-04T11:54:55+03:00",
-  "updatedAt": "2026-11-04T11:59:31+03:00",
+  "updatedAt": "2026-11-04T12:42:33+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -43,12 +43,14 @@ window.STATE =
     },
     {
       "id": "plan",
-      "status": "active",
-      "startedAt": "2026-11-04T11:59:16+03:00"
+      "status": "done",
+      "startedAt": "2026-11-04T11:59:16+03:00",
+      "finishedAt": "2026-11-04T12:01:39+03:00"
     },
     {
       "id": "build",
-      "status": "pending"
+      "status": "active",
+      "startedAt": "2026-11-04T12:01:39+03:00"
     },
     {
       "id": "review",
@@ -61,8 +63,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 91,
-    "done": 0,
-    "inTicket": 91,
+    "done": 7,
+    "inTicket": 84,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -109,9 +111,16 @@ window.STATE =
       ],
       "review": "да — фундамент",
       "model": "сильная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-04T12:01:39+03:00",
+      "finishedAt": "2026-11-04T12:42:33+03:00",
+      "tests": {
+        "passed": 7,
+        "failed": 0
+      },
+      "commit": "f6427c1"
     },
     {
       "id": "02",
@@ -415,7 +424,10 @@ window.STATE =
       "repairs": 0
     }
   ],
-  "tests": null,
+  "tests": {
+    "passed": 7,
+    "failed": 0
+  },
   "debt": {
     "placeholders": [],
     "assumptions": [
@@ -442,9 +454,12 @@ window.STATE =
     "2026-11-04T11:57:03+03:00",
     "2026-11-04T11:57:42+03:00",
     "2026-11-04T11:59:16+03:00",
-    "2026-11-04T11:59:31+03:00"
+    "2026-11-04T11:59:31+03:00",
+    "2026-11-04T12:01:22+03:00",
+    "2026-11-04T12:01:39+03:00",
+    "2026-11-04T12:42:33+03:00"
   ],
-  "rev": 16,
+  "rev": 20,
   "waiting": null,
   "waits": [],
   "log": [
@@ -516,6 +531,39 @@ window.STATE =
       "g": "G3",
       "ok": true,
       "problems": 0
+    },
+    {
+      "t": "2026-11-04T12:01:22+03:00",
+      "k": "gate",
+      "g": "G3",
+      "ok": true,
+      "problems": 0
+    },
+    {
+      "t": "2026-11-04T12:01:39+03:00",
+      "k": "stage",
+      "id": "build",
+      "act": "start"
+    },
+    {
+      "t": "2026-11-04T12:01:39+03:00",
+      "k": "ticket",
+      "ids": [
+        "01"
+      ],
+      "act": "start"
+    },
+    {
+      "t": "2026-11-04T12:42:33+03:00",
+      "k": "ticket",
+      "ids": [
+        "01"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 7,
+        "failed": 0
+      }
     }
   ],
   "reqList": [
@@ -667,7 +715,7 @@ window.STATE =
     {
       "id": "R30",
       "text": "«Git-репозиторий, CLAUDE.md, структура, uv, защита от утечки CSV и секретов, автотесты на каждый push»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R31",
@@ -712,7 +760,7 @@ window.STATE =
     {
       "id": "R39",
       "text": "«Запускается командой uv run pytest и автоматически на каждый push в GitHub»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R40",
@@ -767,7 +815,7 @@ window.STATE =
     {
       "id": "R50",
       "text": "«.gitignore на .csv и папку данных, pre-commit hook блокирует, автотест в CI проверяет. Перед первым push проверяем вручную.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R51",
@@ -832,12 +880,12 @@ window.STATE =
     {
       "id": "R63",
       "text": "«Скиллы (из ~230 глобальных отобраны подходящие)»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R64",
       "text": "«Claude Code · Python + uv + pandas + pytest · DeepSeek API · GitHub (репозиторий, Actions, Pages) · Playwright · gitleaks · Telegram Bot API · запись экрана.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R65",
@@ -847,7 +895,7 @@ window.STATE =
     {
       "id": "R66",
       "text": "«Основной репозиторий открытый, CSV в нём нет.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R67",
@@ -932,7 +980,7 @@ window.STATE =
     {
       "id": "R83",
       "text": "«Этап 1: включить push protection в настройках репозитория (покажу куда нажать).»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R84",
@@ -991,7 +1039,7 @@ window.STATE =
     },
     "G3": {
       "ok": true,
-      "at": "2026-11-04T11:59:16+03:00",
+      "at": "2026-11-04T12:01:22+03:00",
       "problems": 0
     }
   },
