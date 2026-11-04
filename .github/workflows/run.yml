@@ -1,0 +1,180 @@
+name: Пересчёт закупок
+
+# Секреты читает только этот workflow, и только на ветке main (расписание и кнопка владельца).
+# Запуска от pull request здесь нет и быть не должно: см. docs/security.md.
+on:
+  schedule:
+    - cron: "30 4 * * *"      # каждый день 04:30 UTC (07:30 МСК), вне часов пик DeepSeek
+    - cron: "10,40 * * * *"   # проверка: не загрузили ли новые CSV в закрытый репозиторий
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: recalc
+  cancel-in-progress: false
+
+env:
+  DATA_REPO: git@github.com:Dzuba110729/purchase-planning-data.git
+  PAGES_URL: https://dzuba110729.github.io/purchase-planning-ai/
+  # Ключ хоста github.com (публичный, с https://api.github.com/meta): защита от подмены сервера.
+  GITHUB_HOST_KEY: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+
+jobs:
+  recalc:
+    if: github.repository == 'Dzuba110729/purchase-planning-ai'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ env.PAGES_URL }}
+    permissions:
+      contents: read
+      pages: write      # публикация страницы
+      id-token: write   # подтверждение публикации для GitHub Pages
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - run: uv sync --locked
+
+      # Данные: клонируем закрытый репозиторий ключом только на чтение. В лог ничего из файлов не попадает.
+      - name: Получить данные
+        id: fetch
+        continue-on-error: true
+        env:
+          DATA_REPO_DEPLOY_KEY: ${{ secrets.DATA_REPO_DEPLOY_KEY }}
+        run: |
+          set -eu
+          umask 077
+          trap 'rm -rf "${RUNNER_TEMP}/ssh"' EXIT
+          mkdir -p "${RUNNER_TEMP}/ssh"
+          printf '%s\n' "${DATA_REPO_DEPLOY_KEY}" > "${RUNNER_TEMP}/ssh/key"
+          printf '%s\n' "${GITHUB_HOST_KEY}" > "${RUNNER_TEMP}/ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i ${RUNNER_TEMP}/ssh/key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${RUNNER_TEMP}/ssh/known_hosts"
+          git clone --quiet --depth 1 "${DATA_REPO}" "${RUNNER_TEMP}/data"
+          echo "sha=$(git -C "${RUNNER_TEMP}/data" rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Проверка по расписанию «10,40»: если версия данных уже опубликована или уже пробовалась, выходим.
+      - name: Уже пробовали эту версию данных?
+        id: seen
+        if: steps.fetch.outcome == 'success' && github.event.schedule == '10,40 * * * *'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/attempt
+          key: attempt-${{ steps.fetch.outputs.sha }}
+          lookup-only: true
+
+      - name: Решить, нужен ли пересчёт
+        id: gate
+        env:
+          SHA: ${{ steps.fetch.outputs.sha }}
+          SEEN: ${{ steps.seen.outputs.cache-hit }}
+          EVENT: ${{ github.event.schedule }}
+        run: |
+          skip=false
+          if [ "${EVENT}" = "10,40 * * * *" ]; then
+            if [ "${{ steps.fetch.outcome }}" != "success" ]; then
+              skip=true   # проверка молчит, о поломке доступа скажет дневной запуск
+            elif [ "${SEEN}" = "true" ]; then
+              skip=true
+            else
+              published=$(curl -fsSL "${PAGES_URL}data-version.txt?run=${GITHUB_RUN_ID}" 2>/dev/null | tr -d '[:space:]' || true)
+              [ "${published}" = "${SHA}" ] && skip=true
+            fi
+          fi
+          echo "skip=${skip}" >> "$GITHUB_OUTPUT"
+          if [ "${skip}" = "true" ]; then echo "Данные не менялись, пересчёт не нужен."; fi
+
+      - name: Взять прошлую опубликованную страницу
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/previous"
+          curl -fsSL --max-time 60 -o "${RUNNER_TEMP}/previous/index.html" "${PAGES_URL}?run=${GITHUB_RUN_ID}" \
+            || rm -f "${RUNNER_TEMP}/previous/index.html"
+
+      # Пересчёт. Подробности ошибок скрыты: журнал открытого репозитория видят все.
+      - name: Пересчитать закупку и собрать дашборд
+        id: build
+        if: steps.gate.outputs.skip != 'true' && steps.fetch.outcome == 'success'
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          set +e
+          uv run --no-sync purchasing run --data-dir "${RUNNER_TEMP}/data" --out "${RUNNER_TEMP}/site" \
+            --journal "${RUNNER_TEMP}/ai-private/requests.jsonl" --ai --public-logs 2> "${RUNNER_TEMP}/stderr.txt"
+          code=$?
+          grep -E '^Ошибка (данных|сборки)' "${RUNNER_TEMP}/stderr.txt" \
+            || { [ "${code}" -eq 0 ] || echo "Ошибка сборки: подробности скрыты, чтобы не раскрыть данные."; }
+          rm -f "${RUNNER_TEMP}/stderr.txt"
+          rm -rf "${RUNNER_TEMP}/ai-private"
+          echo "code=${code}" >> "$GITHUB_OUTPUT"
+          if [ "${code}" -eq 0 ]; then
+            printf '%s\n' "${{ steps.fetch.outputs.sha }}" > "${RUNNER_TEMP}/site/data-version.txt"
+          fi
+          exit 0
+
+      - name: Собрать страницу для публикации
+        id: pack
+        if: steps.build.outputs.code == '0'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+      - name: Опубликовать страницу
+        id: deploy
+        if: steps.build.outputs.code == '0'
+        continue-on-error: true
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      - name: Отправить сводку в Telegram
+        id: summary
+        if: steps.build.outputs.code == '0' && steps.deploy.outcome == 'success'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.DASHBOARD_NV_BOT }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          uv run --no-sync purchasing notify --site "${RUNNER_TEMP}/site" \
+            --previous "${RUNNER_TEMP}/previous/index.html" --url "${PAGES_URL}"
+
+      - name: Отправить предупреждение в Telegram
+        id: warning
+        if: >-
+          always() && steps.gate.outputs.skip == 'false' &&
+          (steps.fetch.outcome == 'failure' || (steps.build.outputs.code != '' && steps.build.outputs.code != '0') ||
+          steps.deploy.outcome == 'failure')
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.DASHBOARD_NV_BOT }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FETCH: ${{ steps.fetch.outcome }}
+          CODE: ${{ steps.build.outputs.code }}
+        run: |
+          if [ "${FETCH}" = "failure" ]; then reason=fetch
+          elif [ "${CODE}" = "2" ]; then reason=data
+          else reason=build; fi
+          uv run --no-sync purchasing notify-failure --reason "${reason}" --url "${PAGES_URL}"
+
+      - name: Запомнить, что эту версию данных уже пробовали
+        if: always() && steps.gate.outputs.skip == 'false' && steps.fetch.outcome == 'success' && steps.seen.outputs.cache-hit != 'true'
+        run: mkdir -p "${RUNNER_TEMP}/attempt" && echo 1 > "${RUNNER_TEMP}/attempt/mark"
+      - name: Сохранить отметку
+        if: always() && steps.gate.outputs.skip == 'false' && steps.fetch.outcome == 'success' && steps.seen.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/attempt
+          key: attempt-${{ steps.fetch.outputs.sha }}
+
+      - name: Итог запуска
+        if: always() && steps.gate.outputs.skip == 'false'
+        env:
+          FETCH: ${{ steps.fetch.outcome }}
+          CODE: ${{ steps.build.outputs.code }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+        run: |
+          if [ "${FETCH}" != "success" ]; then echo "Не удалось получить данные: проверьте ключ доступа и закрытый репозиторий. Дашборд не обновлён."; exit 1; fi
+          if [ "${CODE}" = "2" ]; then echo "Данные не прошли проверку: исправьте CSV в закрытом репозитории. Старый дашборд остался."; exit 1; fi
+          if [ "${CODE}" != "0" ]; then echo "Сборка не удалась. Старый дашборд остался."; exit 1; fi
+          if [ "${DEPLOY}" != "success" ]; then echo "Публикация страницы не удалась."; exit 1; fi
+          echo "Пересчёт завершён, страница обновлена."

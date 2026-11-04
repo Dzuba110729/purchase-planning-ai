@@ -24,6 +24,21 @@ def build_parser() -> argparse.ArgumentParser:
     dash = sub.add_parser("dashboard", help="собрать статичную страницу и Excel с шаблонными пояснениями")
     dash.add_argument("--facts", default="out/facts.json", help="готовый файл расчёта")
     dash.add_argument("--out", default="out/dashboard", help="папка для index.html и order.xlsx")
+    run = sub.add_parser("run", help="пересчитать закупку и собрать дашборд и Excel")
+    run.add_argument("--data-dir", default=None, help="папка с CSV (иначе DATA_DIR, иначе share/)")
+    run.add_argument("--plan-date", default=None, help="дата плана YYYY-MM-DD")
+    run.add_argument("--out", default="out/dashboard", help="папка для index.html и order.xlsx")
+    run.add_argument("--ai", action="store_true", help="использовать DeepSeek при наличии ключа")
+    run.add_argument("--journal", default="out/ai-private/deepseek-requests.jsonl", help="закрытый журнал DeepSeek")
+    run.add_argument("--public-logs", action="store_true", help="ограничить диагностику для открытых логов CI")
+    note = sub.add_parser("notify", help="отправить в Telegram сводку по собранному дашборду")
+    note.add_argument("--site", default="out/dashboard", help="папка с готовым index.html")
+    note.add_argument("--previous", default=None, help="файл прошлой опубликованной страницы (если есть)")
+    note.add_argument("--url", required=True, help="ссылка на опубликованный дашборд")
+    fail = sub.add_parser("notify-failure", help="отправить в Telegram предупреждение об остановке пересчёта")
+    fail.add_argument("--reason", choices=("data", "fetch", "build"), required=True)
+    fail.add_argument("--url", required=True, help="ссылка на дашборд, который остался прежним")
+    sub.add_parser("telegram-chat-id", help="разово: бот пишет в чат, кто ему написал, его chat id")
     return parser
 
 
@@ -91,4 +106,34 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("Ошибка дашборда: проверьте файл facts.json и доступ к папке вывода.", file=sys.stderr)
             return 2
         print(f"Дашборд и Excel собраны: {path.parent}")
+    elif args.command == "run":
+        from purchasing.notify.pipeline import run
+
+        return run(args.data_dir, args.plan_date, args.out, args.journal, use_ai=args.ai, public_logs=args.public_logs)
+    elif args.command in ("notify", "notify-failure", "telegram-chat-id"):
+        from purchasing import notify
+        from pathlib import Path
+
+        try:
+            if args.command == "notify":
+                plan = notify.read_public_plan((Path(args.site) / "index.html").read_bytes())
+                previous, first = None, True
+                if args.previous and Path(args.previous).is_file():
+                    first = False
+                    try:
+                        previous = notify.read_public_plan(Path(args.previous).read_bytes())
+                    except (OSError, ValueError, UnicodeDecodeError):
+                        previous = None
+                notify.send_summary(plan, previous, args.url, first=first)
+            elif args.command == "notify-failure":
+                notify.send_failure(args.reason, args.url)
+            else:
+                notify.send_chat_id_hint()
+        except notify.NotificationError as exc:
+            print(f"Ошибка уведомления: {exc}", file=sys.stderr)
+            return 3
+        except (OSError, ValueError):
+            print("Ошибка уведомления: не удалось прочитать собранный дашборд.", file=sys.stderr)
+            return 3
+        print("Сообщение отправлено в Telegram.")
     return 0
