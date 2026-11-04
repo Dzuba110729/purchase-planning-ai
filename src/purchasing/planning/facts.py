@@ -2,7 +2,8 @@
 
 Структура (ключи английские, русский — только в текстовых полях):
 schema_version, plan_date, plan_date_source, generated_from{счётчики строк}, params{границы},
-totals{итоги}, lead_time_distribution{items, orders_planned, by_source, by_supply_type, by_category: n/p25/median/p90}, items[по живому товару], lists{price_review, sell_off, ask_supplier},
+totals{итоги}, lead_time_distribution{items, orders_planned, by_source, by_supply_type, by_category: n/p25/median/p90},
+items[по живому товару, включая monthly_forecast], lists{price_review, discontinue, sell_off, ask_supplier},
 forecast_accuracy{warning, computed, backtest_plan_date, horizon_months, categories[WAPE]}.
 Пустое значение — `null`; причина — в `*_note` или в `missing[]` товара. NaN/inf не пишутся.
 """

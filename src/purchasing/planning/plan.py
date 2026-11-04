@@ -371,11 +371,14 @@ def build_plan(dataset, forecast, plan_date=None, accuracy=None) -> PurchasePlan
             "next_order_date": next_date, "next_order_note": no_note, "order_now": order_now,
             "shortage_risk": unavoidable, "unavoidable_shortage": unavoidable, "overstock_risk": overstock,
             "flags": flg, "notes": notes, "missing": missing,
+            "monthly_forecast": [
+                {"month": str(month), "qty": float(qty)} for month, qty in monthly.sort_index().items()
+            ],
         })
 
     by = {i["sku_id"]: i for i in items}
     lists = _build_lists(ds, by, ask_rows, pdate)
-    totals = _totals(ds, items, lists)
+    totals = _totals(ds, items, lists, pdate)
     return PurchasePlan(
         lead_time_distribution=_lead_distribution(items, planned_orders(ds, pdate)),
         plan_date=pdate, plan_date_source=ds.plan_date_source,
@@ -401,18 +404,24 @@ def _build_lists(ds, by, ask_rows, pdate):
             "sku_id": sid, "category": it["category"], "markup_pct": it["markup_pct"], "stock": it["stock"],
             "stock_days": sd, "ending": bool(sd is not None and sd < thr),
         })
-    sell = [
+    discontinue = [
         {"sku_id": sid, "category": sku.loc[sid, "category"], "stock": int(stock_now.get(sid, 0))}
-        for sid in sorted(ds.sell_off_list())
+        for sid in sorted(ds.dead_skus)
     ]
+    sell_off = [row.copy() for row in discontinue if row["stock"] > 0]
     ask = sorted(ask_rows, key=lambda x: (-x["days_overdue"], x["sku_id"], str(x["po_id"])))
-    return {"price_review": review, "sell_off": sell, "ask_supplier": ask}
+    return {"price_review": review, "discontinue": discontinue, "sell_off": sell_off, "ask_supplier": ask}
 
 
-def _totals(ds, items, lists):
+def _totals(ds, items, lists, plan_date):
     auto = [i for i in items if i["in_auto_purchase"]]
+    open_orders = ds.open_orders
+    overdue = open_orders[open_orders["promised_date"] < pd.Timestamp(plan_date)]
     return {
         "live_total": len(items), "dead_total": len(ds.dead_skus),
+        "weight_known_items": int(ds.sku["weight_kg"].count()) if "weight_kg" in ds.sku else None,
+        "open_order_items": len(open_orders),
+        "overdue_order_items": len(overdue), "overdue_order_qty": int(overdue["qty_pending"].sum()),
         "auto_purchase_items": len(auto),
         "order_qty_total": int(sum(i["order_qty"] or 0 for i in items)),
         "order_now_items": sum(1 for i in items if (i["order_qty"] or 0) > 0 and i["order_now"]),

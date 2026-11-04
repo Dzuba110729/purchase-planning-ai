@@ -21,6 +21,9 @@ def build_parser() -> argparse.ArgumentParser:
     fc.add_argument("--data-dir", default=None, help="папка с CSV (иначе DATA_DIR, иначе share/)")
     fc.add_argument("--plan-date", default=None, help="дата плана YYYY-MM-DD")
     fc.add_argument("--out", default="out/facts.json", help="куда записать facts.json (по умолчанию out/facts.json)")
+    dash = sub.add_parser("dashboard", help="собрать статичную страницу и Excel с шаблонными пояснениями")
+    dash.add_argument("--facts", default="out/facts.json", help="готовый файл расчёта")
+    dash.add_argument("--out", default="out/dashboard", help="папка для index.html и order.xlsx")
     return parser
 
 
@@ -70,4 +73,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         t = plan.totals
         print(f"facts.json записан: {path} (дата плана {plan.plan_date}, живых {t['live_total']}, "
               f"в автозакупке {t['auto_purchase_items']}, к заказу {t['order_qty_total']} шт.)")
+    elif args.command == "dashboard":
+        import json
+        from pathlib import Path
+
+        from purchasing.ai import AIConfig, write_texts
+        from purchasing.dashboard import build_site, build_xlsx
+
+        try:
+            facts = json.loads(Path(args.facts).read_text(encoding="utf-8"))
+            if not isinstance(facts, dict):
+                raise ValueError
+            texts = write_texts(facts, config=AIConfig(max_requests=0))
+            path = build_site(facts, texts, args.out)
+            build_xlsx(facts, path.with_name("order.xlsx"))
+        except (OSError, KeyError, TypeError, ValueError):
+            print("Ошибка дашборда: проверьте файл facts.json и доступ к папке вывода.", file=sys.stderr)
+            return 2
+        print(f"Дашборд и Excel собраны: {path.parent}")
     return 0

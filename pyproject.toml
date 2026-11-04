@@ -5,6 +5,7 @@ description = "ИИ-система планирования закупок"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "matplotlib>=3.11.2",
+    "openpyxl>=3.1.5",
     "pandas",
 ]
 
@@ -12,7 +13,11 @@ dependencies = [
 purchasing = "purchasing.cli:main"
 
 [dependency-groups]
-dev = ["pytest", "pre-commit"]
+dev = [
+    "pytest",
+    "pre-commit",
+    "playwright>=1.64.1",
+]
 
 [build-system]
 requires = ["hatchling"]

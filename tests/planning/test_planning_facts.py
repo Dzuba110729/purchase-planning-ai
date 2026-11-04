@@ -19,7 +19,8 @@ GENERATED_KEYS = {"sku_rows", "sales_rows", "stock_rows", "order_rows", "receipt
 TOTALS_KEYS = {"live_total", "dead_total", "auto_purchase_items", "order_qty_total", "order_now_items",
                "shortage_risk_items", "shortage_risk_auto_items", "overstock_risk_items",
                "overstock_risk_auto_items", "price_review_items", "price_review_ending_items",
-               "sell_off_items", "sell_off_qty", "ask_supplier_items", "ask_supplier_qty"}
+               "sell_off_items", "sell_off_qty", "ask_supplier_items", "ask_supplier_qty",
+               "weight_known_items", "open_order_items", "overdue_order_items", "overdue_order_qty"}
 ITEM_KEYS = {
     "sku_id", "category", "supplier_id", "supply_type", "markup_pct", "abc_group", "importance",
     "in_auto_purchase", "exclusion_reason", "stock", "in_transit_qty", "overdue_included_qty",
@@ -27,10 +28,11 @@ ITEM_KEYS = {
     "lead_time_days", "lead_time_source", "lead_time_note", "cover_days", "cover_source", "cover_note",
     "demand_lead_cover", "service_level", "safety_stock", "safety_note", "target_stock", "batch_step",
     "batch_step_source", "order_qty", "order_qty_note", "next_order_date", "next_order_note", "order_now",
-    "shortage_risk", "unavoidable_shortage", "overstock_risk", "flags", "notes", "missing",
+    "shortage_risk", "unavoidable_shortage", "overstock_risk", "flags", "notes", "missing", "monthly_forecast",
 }
 LIST_KEYS = {"price_review": {"sku_id", "category", "markup_pct", "stock", "stock_days", "ending"},
              "sell_off": {"sku_id", "category", "stock"},
+             "discontinue": {"sku_id", "category", "stock"},
              "ask_supplier": {"sku_id", "po_id", "supplier_id", "qty", "days_overdue", "promised_date"}}
 ACCURACY_KEYS = {"warning", "computed", "backtest_plan_date", "horizon_months", "categories"}
 PARAMS_KEYS = {"cover_min_days", "cover_max_days", "overdue_max_days", "overstock_days", "overstock_months",
@@ -57,10 +59,11 @@ def facts_file(world, tmp_path):
         40, {"S1": 1.0, "L": 1.0, "NODATA": 0.0},
         extra_skus=[{"sku_id": "L", "supplier_id": "SUP1", "markup": 10.0},
                     {"sku_id": "NODATA", "supplier_id": None, "supply_type": "unknown", "first_sale_month": "2025-12"},
-                    {"sku_id": "D", "markup": None}],
+                    {"sku_id": "D", "markup": None}, {"sku_id": "D0", "markup": None}],
         extra_stock={"D": 5}, monthly_sales={"NODATA": [0], "D": [0] * 12},
         extra_orders=[open_order("PO-X", "S1", "SUP1", PLAN.replace(year=2025, month=8, day=1), 9)],
     )
+    ds.sku["weight_kg"] = [4.0 if sid == "S1" else None for sid in ds.sku["sku_id"]]
     path = tmp_path / "out" / "facts.json"
     write_facts(build_plan(ds, fc), path)
     return path
@@ -108,7 +111,11 @@ def test_facts_has_no_nan_or_inf_and_explicit_no_data(facts_file):
 def test_totals_match_items_and_lists(facts_file):
     f = json.loads(facts_file.read_text(encoding="utf-8"))
     t, items = f["totals"], f["items"]
-    assert t["live_total"] == len(items) == 3 and t["dead_total"] == 1
+    assert t["live_total"] == len(items) == 3 and t["dead_total"] == 2
+    assert t["weight_known_items"] == 1
+    assert (t["open_order_items"], t["overdue_order_items"], t["overdue_order_qty"]) == (1, 1, 9)
+    assert [(row["sku_id"], row["stock"]) for row in f["lists"]["discontinue"]] == [("D", 5), ("D0", 0)]
+    assert next(i for i in items if i["sku_id"] == "S1")["monthly_forecast"][0] == {"month": "2026-01", "qty": 31.0}
     assert t["auto_purchase_items"] == sum(i["in_auto_purchase"] for i in items)
     assert t["order_qty_total"] == sum(i["order_qty"] or 0 for i in items)
     assert t["price_review_items"] == len(f["lists"]["price_review"])
