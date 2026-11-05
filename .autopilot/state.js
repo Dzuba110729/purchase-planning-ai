@@ -13,7 +13,7 @@ window.STATE =
   "skillDir": "/Users/aleksej_dzyuba/.agents/skills/autopilot",
   "baseCommit": "c0058e1",
   "startedAt": "2026-11-04T11:54:55+03:00",
-  "updatedAt": "2026-11-04T18:04:09+03:00",
+  "updatedAt": "2026-11-05T09:24:56+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -63,8 +63,8 @@ window.STATE =
   ],
   "requirements": {
     "total": 91,
-    "done": 59,
-    "inTicket": 32,
+    "done": 91,
+    "inTicket": 0,
     "inSpec": 0,
     "placeholder": 0,
     "deferred": 0,
@@ -397,10 +397,16 @@ window.STATE =
       ],
       "review": "да — секреты и доступ",
       "model": "сильная",
-      "status": "in-progress",
+      "status": "done",
       "retries": 0,
       "repairs": 0,
-      "startedAt": "2026-11-04T18:04:09+03:00"
+      "startedAt": "2026-11-04T18:04:09+03:00",
+      "finishedAt": "2026-11-05T09:17:12+03:00",
+      "tests": {
+        "passed": 216,
+        "failed": 0
+      },
+      "commit": "9c24e9b"
     },
     {
       "id": "08",
@@ -429,9 +435,16 @@ window.STATE =
       ],
       "review": "нет",
       "model": "обычная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-05T09:17:13+03:00",
+      "finishedAt": "2026-11-05T09:17:13+03:00",
+      "tests": {
+        "passed": 216,
+        "failed": 0
+      },
+      "commit": "3ed32f0"
     },
     {
       "id": "09",
@@ -462,13 +475,20 @@ window.STATE =
       ],
       "review": "нет",
       "model": "обычная",
-      "status": "pending",
+      "status": "done",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-05T09:17:13+03:00",
+      "finishedAt": "2026-11-05T09:24:56+03:00",
+      "tests": {
+        "passed": 216,
+        "failed": 0
+      },
+      "commit": "HEAD"
     }
   ],
   "tests": {
-    "passed": 199,
+    "passed": 216,
     "failed": 0
   },
   "debt": {
@@ -521,9 +541,12 @@ window.STATE =
     "2026-11-04T17:56:42+03:00",
     "2026-11-04T17:58:20+03:00",
     "2026-11-04T18:01:32+03:00",
-    "2026-11-04T18:04:09+03:00"
+    "2026-11-04T18:04:09+03:00",
+    "2026-11-05T09:17:12+03:00",
+    "2026-11-05T09:17:13+03:00",
+    "2026-11-05T09:24:56+03:00"
   ],
-  "rev": 51,
+  "rev": 55,
   "waiting": null,
   "waits": [
     {
@@ -858,28 +881,72 @@ window.STATE =
         "07"
       ],
       "act": "start"
+    },
+    {
+      "t": "2026-11-05T09:17:12+03:00",
+      "k": "ticket",
+      "ids": [
+        "07"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 216,
+        "failed": 0
+      }
+    },
+    {
+      "t": "2026-11-05T09:17:13+03:00",
+      "k": "ticket",
+      "ids": [
+        "08"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 216,
+        "failed": 0
+      }
+    },
+    {
+      "t": "2026-11-05T09:17:13+03:00",
+      "k": "ticket",
+      "ids": [
+        "09"
+      ],
+      "act": "start"
+    },
+    {
+      "t": "2026-11-05T09:24:56+03:00",
+      "k": "ticket",
+      "ids": [
+        "09"
+      ],
+      "act": "done",
+      "tests": {
+        "passed": 216,
+        "failed": 0
+      }
     }
   ],
   "reqList": [
     {
       "id": "R01",
       "text": "«ИИ-система планирования закупок»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R02",
       "text": "«Сдать в Telegram: ссылка на дашборд + видео + регулярный запуск.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R03",
       "text": "«Срок: 48 часов, получено 04.11.2026, сдать до 06.11.2026.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R04",
       "text": "«этап считается готовым, только когда пройдены все его проверки»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R05",
@@ -894,7 +961,7 @@ window.STATE =
     {
       "id": "R07",
       "text": "«Claude Code — «мастерская», где собрана система: CLAUDE.md, скиллы, команды. Её показываем в видео.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R08",
@@ -1039,17 +1106,17 @@ window.STATE =
     {
       "id": "R36",
       "text": "«GitHub Actions по расписанию и по загрузке данных, Telegram-сводка, скилл Claude Code для ручного запуска»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R37",
       "text": "«Сквозной прогон, ИБ-чеклист, проверка с телефона»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R38",
       "text": "«Сценарий, запись, сообщение в Telegram»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R39",
@@ -1099,12 +1166,12 @@ window.STATE =
     {
       "id": "R48",
       "text": "«В CLAUDE.md записано: в README, сводке и сценарии видео — только цифры из итогового файла расчёта facts.json. Сценарий видео собирается из этого файла, а не пишется «по памяти».»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R49",
       "text": "«Отправляем минимум: белый список полей (обезличенный код, категория, готовые цифры). Сырые CSV не отправляем никогда. Каждый запрос сохраняем в закрытый журнал — видно, что именно ушло. В видео прямо говорим: для реальных данных энергетик…",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R50",
@@ -1119,22 +1186,22 @@ window.STATE =
     {
       "id": "R52",
       "text": "«Не печатаем данные и ответы ИИ в лог. Не загружаем сырые данные как артефакты. Публикуем только готовую страницу.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R53",
       "text": "«Deploy key (ключ доступа к одному репозиторию) только на чтение. Не личный токен на весь аккаунт.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R54",
       "text": "«Минимальные права в workflow (permissions), версии Actions закреплены по хешу, зависимости зафиксированы в uv.lock. Запуск только по расписанию, push в main и кнопкой владельца. Без запуска от чужих pull request.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R55",
       "text": "«Текст ИИ вставляется только как текст, с экранированием. Отдельный автотест (этап 6). То же для Telegram.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R56",
@@ -1144,7 +1211,7 @@ window.STATE =
     {
       "id": "R57",
       "text": "«Отправка только в заранее заданный chat_id. Бот ничего не принимает на вход.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R58",
@@ -1154,22 +1221,22 @@ window.STATE =
     {
       "id": "R59",
       "text": "«Запасная цепочка: Pro → Flash → шаблон. При ошибке данных старый дашборд не затирается.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R60",
       "text": "«Для теста это допустимо: там только обезличенные коды. В реальной компании — вход по почте (например, Cloudflare Access). Пишем это в README.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R61",
       "text": "«ИБ-чеклист перед сдачей»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R62",
       "text": "«В README есть раздел «Безопасность» (что куда уходит и почему).»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R63",
@@ -1184,7 +1251,7 @@ window.STATE =
     {
       "id": "R65",
       "text": "«Дашборд — статичная HTML-страница на GitHub Pages, пересчёт через GitHub Actions.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R66",
@@ -1209,7 +1276,7 @@ window.STATE =
     {
       "id": "R70",
       "text": "«запуск по расписанию в 04:30 UTC (07:30 МСК)»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R71",
@@ -1219,17 +1286,17 @@ window.STATE =
     {
       "id": "R72",
       "text": "«Новые данные — через отдельный закрытый репозиторий с CSV. Загрузили файлы через браузер — пересчёт запускается сам. Плюс запуск каждый день и кнопка «запустить сейчас».»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R73",
       "text": "«Telegram-бот после каждого пересчёта присылает сводку: что заказать, где риск, что изменилось + ссылка.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R74",
       "text": "«Видео: Claude пишет сценарий, пользователь записывает экран и озвучивает. Без камеры.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R75",
@@ -1249,27 +1316,27 @@ window.STATE =
     {
       "id": "R78",
       "text": "«Строим через /autopilot full strict, 10 сессий:»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R79",
       "text": "«Делать только свой этап. Не заглядывать вперёд и не переделывать прошлые этапы без причины.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R80",
       "text": "«Закончить, только когда зелёные все проверки своего этапа. Красные — чиним. Не получилось — пишем в PROGRESS.md, что именно, и останавливаемся (следующую сессию не запускать).»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R81",
       "text": "«В конце записать в PROGRESS.md: что сделано, какие проверки прошли (с результатом), что осталось, что следующему знать.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R82",
       "text": "«Никаких CSV в git, никаких ключей в чат и файлы. Что должен сделать пользователь, делает только пользователь (раздел ниже).»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R83",
@@ -1284,17 +1351,17 @@ window.STATE =
     {
       "id": "R85",
       "text": "«Этап 7: создать Telegram-бота через @BotFather и положить токен в секреты GitHub. Токен в чат не пишем.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R86",
       "text": "«Этап 9: записать видео по сценарию.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R87",
       "text": "«если не успеваем, режем в таком порядке: Excel-выгрузка → Telegram-бот → карточка товара. Проверки этапов, дашборд, видео и регулярный запуск не режем.»",
-      "status": "in-ticket"
+      "status": "done"
     },
     {
       "id": "R88",
