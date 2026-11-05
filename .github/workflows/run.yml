@@ -7,6 +7,11 @@ on:
     - cron: "30 4 * * *"      # каждый день 04:30 UTC (07:30 МСК), вне часов пик DeepSeek
     - cron: "10,40 * * * *"   # проверка: не загрузили ли новые CSV в закрытый репозиторий
   workflow_dispatch:
+    inputs:
+      wrong_ai_key:
+        description: "Проверка: подставить заведомо неверный ключ DeepSeek (настоящий ключ не трогаем)"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -99,7 +104,7 @@ jobs:
         id: build
         if: steps.gate.outputs.skip != 'true' && steps.fetch.outcome == 'success'
         env:
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ inputs.wrong_ai_key && 'wrong-key-for-test' || secrets.DEEPSEEK_API_KEY }}
         run: |
           set +e
           uv run --no-sync purchasing run --data-dir "${RUNNER_TEMP}/data" --out "${RUNNER_TEMP}/site" \
