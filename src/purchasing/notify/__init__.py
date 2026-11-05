@@ -48,7 +48,14 @@ def send_chat_id_hint() -> None:
     except (OSError, KeyError, TypeError, ValueError, http.client.HTTPException):
         raise NotificationError("Telegram не ответил. Проверьте токен бота.") from None
     if not chats:
-        raise NotificationError("Боту ещё никто не писал. Откройте бота и нажмите Start.")
+        try:
+            with opener.open(f"https://api.telegram.org/bot{token}/getMe", timeout=15) as response:
+                name = json.loads(response.read(100_001))["result"]["username"]
+        except (OSError, KeyError, TypeError, ValueError, http.client.HTTPException):
+            name = "?"
+        raise NotificationError(
+            f"Боту @{name} ещё никто не писал (обновлений: {len(updates)}). Откройте именно этого бота и нажмите Start."
+        )
     _send(f"Ваш chat id: {chats[-1]}", chat=str(chats[-1]))
 
 
