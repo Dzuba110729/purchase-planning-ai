@@ -13,7 +13,7 @@ window.STATE =
   "skillDir": "/Users/aleksej_dzyuba/.agents/skills/autopilot",
   "baseCommit": "c0058e1",
   "startedAt": "2026-11-04T11:54:55+03:00",
-  "updatedAt": "2026-11-04T18:01:32+03:00",
+  "updatedAt": "2026-11-04T18:04:09+03:00",
   "finishedAt": null,
   "stages": [
     {
@@ -397,9 +397,10 @@ window.STATE =
       ],
       "review": "да — секреты и доступ",
       "model": "сильная",
-      "status": "pending",
+      "status": "in-progress",
       "retries": 0,
-      "repairs": 0
+      "repairs": 0,
+      "startedAt": "2026-11-04T18:04:09+03:00"
     },
     {
       "id": "08",
@@ -519,9 +520,10 @@ window.STATE =
     "2026-11-04T17:46:58+03:00",
     "2026-11-04T17:56:42+03:00",
     "2026-11-04T17:58:20+03:00",
-    "2026-11-04T18:01:32+03:00"
+    "2026-11-04T18:01:32+03:00",
+    "2026-11-04T18:04:09+03:00"
   ],
-  "rev": 48,
+  "rev": 51,
   "waiting": null,
   "waits": [
     {
@@ -848,6 +850,14 @@ window.STATE =
         "passed": 199,
         "failed": 0
       }
+    },
+    {
+      "t": "2026-11-04T18:04:09+03:00",
+      "k": "ticket",
+      "ids": [
+        "07"
+      ],
+      "act": "start"
     }
   ],
   "reqList": [
