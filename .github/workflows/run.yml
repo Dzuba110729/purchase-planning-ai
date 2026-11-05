@@ -27,7 +27,7 @@ env:
 
 jobs:
   recalc:
-    if: github.repository == 'Dzuba110729/purchase-planning-ai'
+    if: github.repository == 'Dzuba110729/purchase-planning-ai' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -42,6 +42,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: false
       - run: uv sync --locked
 
       # Данные: клонируем закрытый репозиторий ключом только на чтение. В лог ничего из файлов не попадает.
@@ -77,10 +79,11 @@ jobs:
           SHA: ${{ steps.fetch.outputs.sha }}
           SEEN: ${{ steps.seen.outputs.cache-hit }}
           EVENT: ${{ github.event.schedule }}
+          FETCHED: ${{ steps.fetch.outcome }}
         run: |
           skip=false
           if [ "${EVENT}" = "10,40 * * * *" ]; then
-            if [ "${{ steps.fetch.outcome }}" != "success" ]; then
+            if [ "${FETCHED}" != "success" ]; then
               skip=true   # проверка молчит, о поломке доступа скажет дневной запуск
             elif [ "${SEEN}" = "true" ]; then
               skip=true
@@ -105,6 +108,7 @@ jobs:
         if: steps.gate.outputs.skip != 'true' && steps.fetch.outcome == 'success'
         env:
           DEEPSEEK_API_KEY: ${{ inputs.wrong_ai_key && 'wrong-key-for-test' || secrets.DEEPSEEK_API_KEY }}
+          DATA_SHA: ${{ steps.fetch.outputs.sha }}
         run: |
           set +e
           uv run --no-sync purchasing run --data-dir "${RUNNER_TEMP}/data" --out "${RUNNER_TEMP}/site" \
@@ -116,7 +120,7 @@ jobs:
           rm -rf "${RUNNER_TEMP}/ai-private"
           echo "code=${code}" >> "$GITHUB_OUTPUT"
           if [ "${code}" -eq 0 ]; then
-            printf '%s\n' "${{ steps.fetch.outputs.sha }}" > "${RUNNER_TEMP}/site/data-version.txt"
+            printf '%s\n' "${DATA_SHA}" > "${RUNNER_TEMP}/site/data-version.txt"
           fi
           exit 0
 
@@ -148,7 +152,7 @@ jobs:
         if: >-
           always() && steps.gate.outputs.skip == 'false' &&
           (steps.fetch.outcome == 'failure' || (steps.build.outputs.code != '' && steps.build.outputs.code != '0') ||
-          steps.deploy.outcome == 'failure')
+          steps.pack.outcome == 'failure' || steps.deploy.outcome == 'failure')
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.DASHBOARD_NV_BOT }}
@@ -177,9 +181,10 @@ jobs:
           FETCH: ${{ steps.fetch.outcome }}
           CODE: ${{ steps.build.outputs.code }}
           DEPLOY: ${{ steps.deploy.outcome }}
+          PACK: ${{ steps.pack.outcome }}
         run: |
           if [ "${FETCH}" != "success" ]; then echo "Не удалось получить данные: проверьте ключ доступа и закрытый репозиторий. Дашборд не обновлён."; exit 1; fi
           if [ "${CODE}" = "2" ]; then echo "Данные не прошли проверку: исправьте CSV в закрытом репозитории. Старый дашборд остался."; exit 1; fi
           if [ "${CODE}" != "0" ]; then echo "Сборка не удалась. Старый дашборд остался."; exit 1; fi
-          if [ "${DEPLOY}" != "success" ]; then echo "Публикация страницы не удалась."; exit 1; fi
+          if [ "${PACK}" = "failure" ] || [ "${DEPLOY}" = "failure" ]; then echo "Публикация страницы не удалась."; exit 1; fi
           echo "Пересчёт завершён, страница обновлена."

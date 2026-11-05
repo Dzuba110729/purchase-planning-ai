@@ -38,7 +38,6 @@ def build_parser() -> argparse.ArgumentParser:
     fail = sub.add_parser("notify-failure", help="отправить в Telegram предупреждение об остановке пересчёта")
     fail.add_argument("--reason", choices=("data", "fetch", "build"), required=True)
     fail.add_argument("--url", required=True, help="ссылка на дашборд, который остался прежним")
-    sub.add_parser("telegram-chat-id", help="разово: бот пишет в чат, кто ему написал, его chat id")
     return parser
 
 
@@ -110,7 +109,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         from purchasing.notify.pipeline import run
 
         return run(args.data_dir, args.plan_date, args.out, args.journal, use_ai=args.ai, public_logs=args.public_logs)
-    elif args.command in ("notify", "notify-failure", "telegram-chat-id"):
+    elif args.command in ("notify", "notify-failure"):
         from purchasing import notify
         from pathlib import Path
 
@@ -125,10 +124,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     except (OSError, ValueError, UnicodeDecodeError):
                         previous = None
                 notify.send_summary(plan, previous, args.url, first=first)
-            elif args.command == "notify-failure":
-                notify.send_failure(args.reason, args.url)
             else:
-                notify.send_chat_id_hint()
+                notify.send_failure(args.reason, args.url)
         except notify.NotificationError as exc:
             print(f"Ошибка уведомления: {exc}", file=sys.stderr)
             return 3

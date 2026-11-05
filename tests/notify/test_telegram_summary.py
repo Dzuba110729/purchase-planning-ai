@@ -79,18 +79,6 @@ def test_failure_message_says_dashboard_is_unchanged(monkeypatch):
     assert "https://example.github.io/demo/" in text
 
 
-def test_chat_id_hint_goes_only_to_the_chat_that_wrote_to_the_bot(monkeypatch, capsys):
-    updates = b'{"ok": true, "result": [{"message": {"chat": {"id": 777, "type": "private"}}}]}'
-    calls = _fake_telegram(monkeypatch, [updates, b'{"ok": true, "result": {"chat": {"id": 777}}}'])
-    monkeypatch.delenv("TELEGRAM_CHAT_ID")
-
-    notify.send_chat_id_hint()
-
-    assert json.loads(calls[1].data)["chat_id"] == 777
-    assert "777" in json.loads(calls[1].data)["text"]
-    assert "777" not in capsys.readouterr().out
-
-
 def test_summary_marks_unavailable_ai_and_telegram_errors_hide_token(tmp_path, monkeypatch):
     _fake_telegram(monkeypatch, [b'{"ok": false}'])
     plan = notify.read_public_plan(_page(tmp_path, 8, shortage=False))

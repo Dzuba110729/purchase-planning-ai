@@ -10,8 +10,8 @@ description: Обновить данные и пересчитать закуп�
 ## Шаги
 
 1. Спроси пользователя, загрузил ли он новые CSV в закрытый репозиторий `Dzuba110729/purchase-planning-data` (через браузер: Add file → Upload files → Commit changes). Новые CSV в этот проект не копируй.
-2. Запусти пересчёт: `gh workflow run run.yml -R Dzuba110729/purchase-planning-ai --ref main`.
-3. Подожди результат: `gh run watch $(gh run list -R Dzuba110729/purchase-planning-ai --workflow run.yml --limit 1 --json databaseId --jq '.[0].databaseId') -R Dzuba110729/purchase-planning-ai --exit-status`.
+2. Пересчёт тратит деньги на ИИ и пишет в Telegram: сначала спроси «запускаю?» и жди «да». Если просили только посмотреть, что изменилось, открой последнюю сводку, а не запускай. Запусти: `gh workflow run run.yml -R Dzuba110729/purchase-planning-ai --ref main`.
+3. Подожди результат: `gh run watch $(gh run list -R Dzuba110729/purchase-planning-ai --workflow run.yml --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId') -R Dzuba110729/purchase-planning-ai --exit-status`.
 4. Скажи пользователю простыми словами: зелёный или красный запуск, ссылка на дашборд `https://dzuba110729.github.io/purchase-planning-ai/`, что пришло в Telegram.
 5. Красный запуск: строка «Ошибка данных» — файл CSV сломан, дашборд остался прежним; исправить файл в закрытом репозитории. «ИИ недоступен» в Telegram — не авария: тексты шаблонные, цифры те же.
 
